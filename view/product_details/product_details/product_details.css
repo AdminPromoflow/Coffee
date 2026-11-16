@@ -1,14 +1,14 @@
 :root {
-  --bg: #f7f7fb;
-  --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --brand: #005548;
-  --accent: #fbd160;
+  --bg: #fbf9f7;
+  --card: #fdfbfa;
+  --text: #241b14;
+  --muted: #8f745c;
+  --border: #f1e7df;
+  --brand: #6f432b;
+  --accent: #dfbc87;
   --danger: #dc2626;
   --danger-dark: #b91c1c;
-  --shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
+  --shadow: 0 10px 30px rgba(36, 27, 20, 0.08);
   --radius: 16px;
   --radius-sm: 10px;
 }
@@ -25,9 +25,9 @@ body {
   background:
     radial-gradient(
       circle at top,
-      #e5f3ef 0,
-      #f7f7fb 45%,
-      #f9fafb 100%
+      #f3e7da 0,
+      #fbf9f7 45%,
+      #fdfbfa 100%
     );
 }
 
@@ -55,8 +55,8 @@ body {
   align-items: center;
   gap: 8px;
 
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
@@ -67,9 +67,9 @@ body {
 
   padding: 10px 16px;
 
-  color: #2c3e50;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  color: #513d2b;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 8px;
 
   text-decoration: none;
@@ -81,28 +81,28 @@ body {
 }
 
 .cp-tab:hover {
-  color: #1a202c;
-  background: #f8f9fa;
-  border-color: #d1d5db;
+  color: #2e2218;
+  background: #fbf9f7;
+  border-color: #e6d5c6;
 
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .cp-tab.active {
-  color: #ffffff;
+  color: #fdfbfa;
 
   background:
     linear-gradient(
       135deg,
-      #005548 0%,
-      #006b5a 100%
+      #6f432b 0%,
+      #875638 100%
     );
 
-  border-color: #005548;
+  border-color: #6f432b;
 
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 85, 72, 0.3);
+  box-shadow: 0 4px 12px rgba(111, 67, 43, 0.3);
 }
 
 .cp-tab.active::after {
@@ -114,7 +114,7 @@ body {
   background:
     linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.1) 0%,
+      rgba(253, 251, 250, 0.1) 0%,
       transparent 50%
     );
 
@@ -129,8 +129,8 @@ body {
   width: 100%;
   padding: 24px;
 
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 
@@ -150,9 +150,9 @@ body {
   background:
     linear-gradient(
       90deg,
-      #005548 0%,
-      #006b5a 50%,
-      #005548 100%
+      #6f432b 0%,
+      #875638 50%,
+      #6f432b 100%
     );
 
   opacity: 0.8;
@@ -167,13 +167,13 @@ body {
   justify-content: space-between;
   gap: 16px;
 
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid #f8f2ed;
 }
 
 .cp-card-header h2 {
   margin: 0;
 
-  color: #1a202c;
+  color: #2e2218;
 
   font-size: 1.25rem;
   font-weight: 700;
@@ -183,7 +183,7 @@ body {
 .cp-subtitle {
   margin: 4px 0 0;
 
-  color: #6b7280;
+  color: #8f745c;
 
   font-size: 0.9rem;
   font-weight: 400;
@@ -199,8 +199,8 @@ body {
   min-width: 220px;
   padding: 10px 16px;
 
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 8px;
 
   font-size: 0.9rem;
@@ -210,8 +210,8 @@ body {
 
 .cp-search:focus {
   outline: none;
-  border-color: #005548;
-  box-shadow: 0 0 0 3px rgba(0, 85, 72, 0.1);
+  border-color: #6f432b;
+  box-shadow: 0 0 0 3px rgba(111, 67, 43, 0.1);
 }
 
 /* Category grid */
@@ -233,8 +233,8 @@ body {
   display: grid;
   gap: 8px;
 
-  background: #ffffff;
-  border: 2px solid #e1e5e9;
+  background: #fdfbfa;
+  border: 2px solid #efe4db;
   border-radius: 12px;
 
   cursor: pointer;
@@ -251,7 +251,7 @@ body {
     linear-gradient(
       135deg,
       transparent 0%,
-      rgba(0, 85, 72, 0.02) 100%
+      rgba(111, 67, 43, 0.02) 100%
     );
 
   opacity: 0;
@@ -259,7 +259,7 @@ body {
 }
 
 .cp-cat:hover {
-  border-color: #005548;
+  border-color: #6f432b;
 
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -270,7 +270,7 @@ body {
 }
 
 .cp-cat-name {
-  color: #1a202c;
+  color: #2e2218;
 
   font-weight: 700;
   font-size: 0.95rem;
@@ -278,7 +278,7 @@ body {
 }
 
 .cp-cat-meta {
-  color: #6b7280;
+  color: #8f745c;
 
   font-size: 0.85rem;
   font-weight: 500;
@@ -315,7 +315,7 @@ body {
 }
 
 .cp-label {
-  color: #374151;
+  color: #584330;
 
   font-weight: 600;
   font-size: 0.9rem;
@@ -324,7 +324,7 @@ body {
 .cp-hint {
   margin-top: 4px;
 
-  color: #6b7280;
+  color: #8f745c;
 
   font-size: 0.85rem;
   font-weight: 400;
@@ -336,9 +336,9 @@ body {
   min-height: 44px;
   padding: 12px 16px;
 
-  color: #1a202c;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  color: #2e2218;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 8px;
   outline: none;
 
@@ -357,14 +357,14 @@ body {
 .cp-form input:focus,
 .cp-form select:focus,
 .cp-form textarea:focus {
-  background: #ffffff;
-  border-color: #005548;
-  box-shadow: 0 0 0 3px rgba(0, 85, 72, 0.1);
+  background: #fdfbfa;
+  border-color: #6f432b;
+  box-shadow: 0 0 0 3px rgba(111, 67, 43, 0.1);
 }
 
 .cp-form input::placeholder,
 .cp-form textarea::placeholder {
-  color: #9ca3af;
+  color: #b9a492;
 }
 
 /* Inline input row */
@@ -384,9 +384,9 @@ body {
   padding: 12px 20px;
 
   appearance: none;
-  color: #374151;
-  background: #ffffff;
-  border: 1px solid #e1e5e9;
+  color: #584330;
+  background: #fdfbfa;
+  border: 1px solid #efe4db;
   border-radius: 8px;
 
   font-family: inherit;
@@ -398,7 +398,7 @@ body {
 }
 
 .btn:hover {
-  background: #f8f9fa;
+  background: #fbf9f7;
 
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -406,36 +406,36 @@ body {
 
 /* Save button */
 .btn-primary {
-  color: #ffffff;
+  color: #fdfbfa;
 
   background:
     linear-gradient(
       135deg,
-      #005548 0%,
-      #006b5a 100%
+      #6f432b 0%,
+      #875638 100%
     );
 
-  border-color: #005548;
-  box-shadow: 0 2px 8px rgba(0, 85, 72, 0.2);
+  border-color: #6f432b;
+  box-shadow: 0 2px 8px rgba(111, 67, 43, 0.2);
 }
 
 .btn-primary:hover {
   background:
     linear-gradient(
       135deg,
-      #004a3e 0%,
+      #56321f 0%,
       #005a4d 100%
     );
 
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 85, 72, 0.3);
+  box-shadow: 0 4px 16px rgba(111, 67, 43, 0.3);
 }
 
 /* Reset button */
 .btn-danger {
   margin: 0 8px;
 
-  color: #ffffff;
+  color: #fdfbfa;
 
   background:
     linear-gradient(
@@ -450,7 +450,7 @@ body {
 
 /* Delete product button */
 .btn-delete-product {
-  color: #ffffff;
+  color: #fdfbfa;
 
   background:
     linear-gradient(
@@ -464,7 +464,7 @@ body {
 }
 
 .btn-delete-product:hover {
-  color: #ffffff;
+  color: #fdfbfa;
 
   background:
     linear-gradient(
@@ -485,9 +485,9 @@ body {
 
   padding: 32px 20px;
 
-  color: #6b7280;
-  background: #f8f9fa;
-  border: 2px dashed #e1e5e9;
+  color: #8f745c;
+  background: #fbf9f7;
+  border: 2px dashed #efe4db;
   border-radius: 12px;
 
   text-align: center;
@@ -529,8 +529,8 @@ body {
   flex: 0 0 100%;
   padding: .65rem .8rem;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #192d46;
+  background: #faf7f4;
+  color: #3e2f21;
   font-size: .9rem;
   overflow-wrap: anywhere;
 }
@@ -568,7 +568,7 @@ body {
 
   appearance: none;
   color: var(--text);
-  background: #ffffff;
+  background: #fdfbfa;
   border: 1px solid var(--border);
   border-radius: 12px;
 
@@ -590,41 +590,41 @@ body {
 
 /* Footer Save button */
 .cp-footer .btn-primary {
-  color: #ffffff;
+  color: #fdfbfa;
   background: var(--brand);
   border-color: var(--brand);
   box-shadow: none;
 }
 
 .cp-footer .btn-primary:hover {
-  color: #ffffff;
-  background: #004a3e;
-  border-color: #004a3e;
+  color: #fdfbfa;
+  background: #56321f;
+  border-color: #56321f;
 }
 
 /* Footer Reset button */
 .cp-footer .btn-danger {
   color: #ef4444;
-  background: #ffffff;
+  background: #fdfbfa;
   border-color: #ef4444;
   box-shadow: none;
 }
 
 .cp-footer .btn-danger:hover {
-  color: #ffffff;
+  color: #fdfbfa;
   background: #ef4444;
 }
 
 /* Footer Delete product button */
 .cp-footer .btn-delete-product {
-  color: #ffffff;
+  color: #fdfbfa;
   background: var(--danger);
   border-color: var(--danger);
   box-shadow: none;
 }
 
 .cp-footer .btn-delete-product:hover {
-  color: #ffffff;
+  color: #fdfbfa;
   background: var(--danger-dark);
   border-color: var(--danger-dark);
 }
@@ -636,7 +636,7 @@ body {
 
   appearance: none;
   color: var(--text);
-  background: #f8f9fa;
+  background: #fbf9f7;
   border: 1px solid var(--border);
   border-radius: 12px;
 
@@ -649,7 +649,7 @@ body {
 }
 
 .cp-footer .btn-back:hover {
-  color: #ffffff;
+  color: #fdfbfa;
   background: var(--muted);
 
   transform: translateY(-1px);

@@ -7,7 +7,7 @@ a { text-decoration: none; color: inherit; }
   position: sticky;
   top: 0;
   z-index: 1000;
-  background-color: #fafafa;
+  background-color: #fdfbfa;
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: .75rem 1rem;
   display: flex;
@@ -49,14 +49,14 @@ a { text-decoration: none; color: inherit; }
   right: 0;
   height: 3px;
   border-radius: 2px;
-  background: #222;
+  background: #2c2118;
   transition: transform .25s ease, top .25s ease, opacity .25s ease;
 }
 .burger::before{ top: 6px; }
 .burger::after{ top: 19px; }
 /* Línea central usando background gradient */
 .burger{
-  background: linear-gradient(#222 0 0) center 50%/100% 3px no-repeat;
+  background: linear-gradient(#2c2118 0 0) center 50%/100% 3px no-repeat;
 }
 
 /* Navegación: móvil (mobile-first) -> panel deslizante */
@@ -66,7 +66,7 @@ a { text-decoration: none; color: inherit; }
   width: min(80vw, 300px);
   transform: translateX(100%);
   transition: transform .3s ease;
-  background: rgba(47,69,96,.97);
+  background: rgba(93, 70, 50,.97);
   padding: 5rem 1.25rem 2rem;
   display: flex;
   align-items: flex-start;
@@ -81,17 +81,17 @@ a { text-decoration: none; color: inherit; }
 .nav-list a{
   display: block;
   padding: .9rem 1rem;
-  color: #fff;
+  color: #fdfbfa;
   border-radius: 8px;
   transition: background .2s ease, transform .2s ease;
 }
-.nav-list a:hover{ background: rgba(255,255,255,.08); transform: translateX(2px); }
+.nav-list a:hover{ background: rgba(253, 251, 250,.08); transform: translateX(2px); }
 .nav-list .cta{
-  background: #fff;
-  color: #2f4560;
+  background: #fdfbfa;
+  color: #5d4632;
   font-weight: 600;
 }
-.nav-list .cta:hover{ background: #f3f5f8; }
+.nav-list .cta:hover{ background: #f9f5f2; }
 
 /* Abrir menú cuando el checkbox está marcado */
 .nav-toggle:checked ~ .nav{ transform: translateX(0); }
@@ -131,13 +131,13 @@ a { text-decoration: none; color: inherit; }
   }
 
   .nav-list a{
-    color: #1d1d1f;
+    color: #271d15;
     padding: .5rem .75rem;
   }
   .nav-list a:hover{ background: rgba(0,0,0,.06); transform: none; }
   .nav-list .cta{
-    background: #2f4560;
-    color: #fff;
+    background: #5d4632;
+    color: #fdfbfa;
   }
-  .nav-list .cta:hover{ background: #22364e; }
+  .nav-list .cta:hover{ background: #493727; }
 }

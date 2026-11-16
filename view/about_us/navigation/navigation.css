@@ -6,8 +6,8 @@
 .nav-section {
   width: 100%;
   padding: 1.15rem max(1rem, calc((100% - 1200px) / 2));
-  background: #f6f8fb;
-  border-bottom: 1px solid rgba(20, 38, 61, 0.08);
+  background: #fbf8f6;
+  border-bottom: 1px solid rgba(53, 40, 28, 0.08);
 }
 
 .nav-breadcrumbs {
@@ -29,7 +29,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
-  color: #738197;
+  color: #a0836a;
   font-family: "DM Sans", system-ui, sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
@@ -38,12 +38,12 @@
 
 .nav-breadcrumbs__item:not(:last-child)::after {
   content: "/";
-  color: #a9b3c0;
+  color: #c5b3a4;
   font-weight: 400;
 }
 
 .nav-breadcrumbs__link {
-  color: #4c5d73;
+  color: #7c5e43;
   text-decoration: none;
   transition: color 0.2s ease;
 }
@@ -53,7 +53,7 @@
 }
 
 .nav-breadcrumbs__current {
-  color: #172b45;
+  color: #3c2d20;
 }
 
 .nav-breadcrumbs__link:focus-visible {

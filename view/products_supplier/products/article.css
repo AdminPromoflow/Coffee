@@ -1,13 +1,13 @@
 :root{
   /* Theme tokens (single source of truth) */
   --brand:   #00695c;                 /* main brand green */
-  --accent:  #fbd160;
+  --accent:  #dfbc87;
   --page-bg: #e4f3ee;                 /* soft green background */
 
   --bg:      var(--page-bg);
-  --card:    #ffffff;
+  --card:    #fdfbfa;
   --text:    #0b1110;
-  --muted:   #5b6a65;
+  --muted:   #806145;
   --border:  #c6ddd4;
 
   --brand-soft:  #ecfdf5;
@@ -15,7 +15,7 @@
   --radius:    18px;
   --radius-sm: 14px;
 
-  --shadow:       0 8px 24px rgba(17,24,39,.08);
+  --shadow:       0 8px 24px rgba(36, 27, 20,.08);
   --shadow-soft:  0 10px 30px rgba(11, 17, 16, 0.08);
 
   --space-1: 8px;
@@ -39,9 +39,9 @@ body{
   width:40px; height:40px; border-radius:50%;
   border:1px solid var(--border);
   background:
-    linear-gradient(#fff, #fff) padding-box,
-    linear-gradient(135deg, color-mix(in oklab, var(--brand) 60%, #fff 40%), var(--accent)) border-box;
-  color:#334155;
+    linear-gradient(#fdfbfa, #fdfbfa) padding-box,
+    linear-gradient(135deg, color-mix(in oklab, var(--brand) 60%, #fdfbfa 40%), var(--accent)) border-box;
+  color:#584330;
   transition: transform .15s ease, box-shadow .15s ease, background .3s ease;
 }
 .btn-icon.back-btn:hover{
@@ -59,15 +59,15 @@ body{
   gap: var(--space-2); margin-bottom: var(--space-3);
   border: 1px solid transparent;
   background:
-    linear-gradient(#fff, #fff) padding-box,
-    linear-gradient(135deg, color-mix(in oklab, var(--brand) 60%, #fff 40%), var(--accent)) border-box;
+    linear-gradient(#fdfbfa, #fdfbfa) padding-box,
+    linear-gradient(135deg, color-mix(in oklab, var(--brand) 60%, #fdfbfa 40%), var(--accent)) border-box;
   border-radius: calc(var(--radius) + 2px);
 }
 .toolbar__left{ display:flex; align-items:center; gap: var(--space-2); }
 .toolbar__right{ display:flex; gap: var(--space-2); align-items:end; }
 .field{ display:grid; gap:6px; }
 .field select{
-  border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:#fff;
+  border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:#fdfbfa;
 }
 
 /* Filtros */
@@ -79,7 +79,7 @@ body{
 .products__field input, .products__field select{ width:100%; min-width:0; }
 .products__field span{ font-size:.9rem; color: var(--muted); }
 .products__field input, .products__field select{
-  border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:#fff;
+  border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:#fdfbfa;
 }
 .field--withicon{ position:relative; }
 .infield-icon{ position:absolute; right:12px; bottom:10px; opacity:.45; }
@@ -91,17 +91,17 @@ body{
   position:sticky; top:0; z-index:2;
   display:flex; align-items:center; justify-content:space-between;
   padding-bottom: var(--space-2);
-  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.97));
+  background: linear-gradient(180deg, rgba(253, 251, 250,.85), rgba(253, 251, 250,.97));
   backdrop-filter: blur(6px);
 }
 .table-wrap{ overflow:auto; border-radius: calc(var(--radius) - 4px); }
 .products__table{
-  width:100%; border-collapse:collapse; font-size:.95rem; background:#fff;
+  width:100%; border-collapse:collapse; font-size:.95rem; background:#fdfbfa;
 }
 .products__table thead th{
   position:sticky; top:0; z-index:1;
-  background: linear-gradient(180deg,#fafafa,#fff);
-  color:#374151; text-align:left; padding:12px 14px; border-bottom:1px solid var(--border);
+  background: linear-gradient(180deg,#fdfbfa,#fdfbfa);
+  color:#584330; text-align:left; padding:12px 14px; border-bottom:1px solid var(--border);
 }
 .products__table tbody td{
   padding:14px; border-top:1px solid var(--border); vertical-align:top; white-space:nowrap;
@@ -116,12 +116,12 @@ body{
   display:inline-flex; align-items:center; gap:6px;
   border:1px dashed color-mix(in oklab, var(--brand) 50%, #0000);
   padding:4px 10px; border-radius:999px; font-size:.8rem;
-  background: color-mix(in oklab, var(--brand) 5%, #fff 95%);
+  background: color-mix(in oklab, var(--brand) 5%, #fdfbfa 95%);
 }
 .badge{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-size:.8rem; font-weight:800; }
-.badge i{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#999; }
+.badge i{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#af9883; }
 .badge-warning{ background:#fff4cc; color:#8a6b00; } .badge-warning i{ background:#8a6b00; }
-.badge-info{    background:#e6f4ff; color:#0b69a3; } .badge-info i{  background:#0b69a3; }
+.badge-info{    background:#f8f2ed; color:#71553d; } .badge-info i{  background:#71553d; }
 .badge-success{ background:#e8f7ee; color:#1e7b47; } .badge-success i{ background:#1e7b47; }
 
 /* Paginación */
@@ -140,7 +140,7 @@ body{
   .products__table thead{ position:absolute !important; width:1px; height:1px; overflow:hidden; padding:0; margin:-1px; clip:rect(0,0,0,0); }
   .products__table tbody tr{
     display:grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding:12px; margin-bottom:10px;
-    border:1px solid var(--border); border-radius:12px; background:#fff;
+    border:1px solid var(--border); border-radius:12px; background:#fdfbfa;
   }
   .products__table td{
     border:0; padding:0; white-space:normal; display:grid; grid-template-columns:110px 1fr; gap:8px;

@@ -29,7 +29,7 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  color: #dce7f2;
+  color: #f1e6dd;
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -44,11 +44,11 @@
 }
 
 .about-eyebrow--dark {
-  color: #617087;
+  color: #8e725a;
 }
 
 .about-hero .about-eyebrow {
-  color: #65758b;
+  color: #92765e;
 }
 
 .about-hero h1,
@@ -114,21 +114,21 @@
 }
 
 .about-main .about-button--primary {
-  color: #fff;
+  color: #fdfbfa;
   background: var(--about-navy);
-  box-shadow: 0 14px 28px rgba(23, 43, 69, 0.2);
+  box-shadow: 0 14px 28px rgba(60, 45, 32, 0.2);
 }
 
 .about-main .about-button--primary:hover {
-  color: #fff;
-  background: #0f2239;
+  color: #fdfbfa;
+  background: #2f2319;
   transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(23, 43, 69, 0.25);
+  box-shadow: 0 18px 34px rgba(60, 45, 32, 0.25);
 }
 
 .about-button--text {
   padding-inline: 0.35rem;
-  color: #3e5067;
+  color: #6b513a;
 }
 
 .about-button--text:hover {
@@ -148,8 +148,8 @@
   display: grid;
   place-items: center;
   border-radius: 34px;
-  background: linear-gradient(145deg, #213b59 0%, #14283f 72%);
-  box-shadow: 0 34px 70px rgba(19, 39, 62, 0.24);
+  background: linear-gradient(145deg, #4f3c2b 0%, #36291d 72%);
+  box-shadow: 0 34px 70px rgba(53, 40, 28, 0.24);
   isolation: isolate;
 }
 
@@ -158,7 +158,7 @@
   position: absolute;
   inset: 14px;
   z-index: -1;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(253, 251, 250, 0.1);
   border-radius: 25px;
 }
 
@@ -192,11 +192,11 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fdfbfa;
+  border: 1px solid rgba(253, 251, 250, 0.16);
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.085);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 24px 40px rgba(4, 17, 31, 0.22);
+  background: rgba(253, 251, 250, 0.085);
+  box-shadow: inset 0 1px 0 rgba(253, 251, 250, 0.12), 0 24px 40px rgba(23, 17, 12, 0.22);
   backdrop-filter: blur(10px);
   transform: rotate(-3deg);
 }
@@ -218,7 +218,7 @@
 
 .about-brand-card p {
   margin: 0 0 0.3rem;
-  color: #b8c7d8;
+  color: #d4c7bc;
   font-size: 0.95rem;
 }
 
@@ -246,10 +246,10 @@
   align-items: center;
   gap: 0.75rem;
   color: var(--about-navy);
-  border: 1px solid rgba(20, 38, 61, 0.08);
+  border: 1px solid rgba(53, 40, 28, 0.08);
   border-radius: 15px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 34px rgba(5, 19, 35, 0.2);
+  background: rgba(253, 251, 250, 0.96);
+  box-shadow: 0 18px 34px rgba(26, 20, 14, 0.2);
 }
 
 .about-float-card > span {
@@ -257,7 +257,7 @@
   height: 38px;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: #fdfbfa;
   border-radius: 12px;
   background: var(--about-orange);
   font-size: 1.1rem;
@@ -270,7 +270,7 @@
 }
 
 .about-float-card small {
-  color: #748197;
+  color: #a0846b;
   font-size: 0.68rem;
 }
 
@@ -345,7 +345,7 @@
 
 .about-values {
   padding: clamp(5rem, 9vw, 8rem) max(1rem, calc((100% - 1200px) / 2));
-  background: #fff;
+  background: #fdfbfa;
 }
 
 .about-section-heading {
@@ -404,8 +404,8 @@
 }
 
 .about-value-card--blue {
-  color: #21446f;
-  background: #e8f1fb;
+  color: #5e4732;
+  background: #f7f1ec;
 }
 
 .about-value-card--mint {
@@ -419,8 +419,8 @@
   display: grid;
   place-items: center;
   border-radius: 17px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 10px 25px rgba(20, 38, 61, 0.08);
+  background: rgba(253, 251, 250, 0.74);
+  box-shadow: 0 10px 25px rgba(53, 40, 28, 0.08);
 }
 
 .about-value-card__icon svg {
@@ -454,7 +454,7 @@
   z-index: 1;
   margin: 0;
   max-width: 310px;
-  color: rgba(20, 38, 61, 0.72);
+  color: rgba(53, 40, 28, 0.72);
   font-size: 0.94rem;
   line-height: 1.65;
 }
@@ -467,20 +467,20 @@
   grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.78fr);
   align-items: center;
   gap: clamp(3rem, 8vw, 7rem);
-  color: #fff;
+  color: #fdfbfa;
   border-radius: 30px;
   background: var(--about-navy);
-  box-shadow: 0 30px 60px rgba(18, 38, 61, 0.18);
+  box-shadow: 0 30px 60px rgba(51, 39, 28, 0.18);
 }
 
 .about-story h2,
 .about-cta h2 {
-  color: #fff;
+  color: #fdfbfa;
 }
 
 .about-story__copy > p:not(.about-eyebrow) {
   margin: 1.5rem 0 0;
-  color: #b9c7d7;
+  color: #d4c7bc;
   font-size: 1rem;
   line-height: 1.75;
 }
@@ -490,8 +490,8 @@
   display: inline-flex;
   gap: 0.45rem;
   align-items: center;
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fdfbfa;
+  border-bottom: 1px solid rgba(253, 251, 250, 0.35);
   font-size: 0.94rem;
   font-weight: 700;
   line-height: 2;
@@ -513,7 +513,7 @@
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
   gap: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(253, 251, 250, 0.12);
 }
 
 .about-process li:first-child {
@@ -530,8 +530,8 @@
   height: 42px;
   display: grid;
   place-items: center;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fdfbfa;
+  border: 1px solid rgba(253, 251, 250, 0.2);
   border-radius: 50%;
   font-size: 0.8rem;
   font-weight: 700;
@@ -545,7 +545,7 @@
 
 .about-process p {
   margin: 0.35rem 0 0;
-  color: #aebdce;
+  color: #ccbdb0;
   font-size: 0.88rem;
   line-height: 1.55;
 }
@@ -557,7 +557,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 2rem;
-  color: #fff;
+  color: #fdfbfa;
   background: var(--about-orange);
 }
 
@@ -566,13 +566,13 @@
 }
 
 .about-cta .about-eyebrow > span {
-  background: #fff;
+  background: #fdfbfa;
 }
 
 .about-main .about-button--light {
   min-width: 180px;
   color: var(--about-navy);
-  background: #fff;
+  background: #fdfbfa;
   box-shadow: 0 14px 28px rgba(103, 46, 15, 0.18);
 }
 
@@ -588,8 +588,8 @@
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 2rem;
-  color: #9fb0c4;
-  background: #102238;
+  color: #c3b0a0;
+  background: #2f2319;
   font-size: 0.78rem;
 }
 
@@ -601,7 +601,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  color: #fff;
+  color: #fdfbfa;
   font-family: "Manrope", sans-serif;
   font-size: 1.35rem;
   font-weight: 800;
@@ -615,7 +615,7 @@
 
 .about-footer__brand small {
   padding-left: 0.55rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid rgba(253, 251, 250, 0.2);
   font-size: 0.63rem;
   font-weight: 600;
   letter-spacing: 0.14em;

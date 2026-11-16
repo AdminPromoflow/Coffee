@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
-  --about-ink: #14263d;
-  --about-muted: #607086;
-  --about-navy: #172b45;
-  --about-navy-light: #244260;
-  --about-orange: #ff7a2f;
+  --about-ink: #35281c;
+  --about-muted: #8c715a;
+  --about-navy: #3c2d20;
+  --about-navy-light: #56412e;
+  --about-orange: #b77b49;
   --about-orange-dark: #df5f19;
-  --about-canvas: #f6f8fb;
-  --about-white: #ffffff;
-  --about-line: rgba(20, 38, 61, 0.1);
+  --about-canvas: #fbf8f6;
+  --about-white: #fdfbfa;
+  --about-line: rgba(53, 40, 28, 0.1);
 }
 
 *,
@@ -49,7 +49,7 @@ body.about-body {
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.7rem 1rem;
-  color: #fff;
+  color: #fdfbfa;
   background: var(--about-navy);
   border-radius: 10px;
   text-decoration: none;
@@ -62,8 +62,8 @@ body.about-body {
 }
 
 ::selection {
-  color: #fff;
-  background: #2d65aa;
+  color: #fdfbfa;
+  background: #836a54;
 }
 
 @media (prefers-reduced-motion: reduce) {

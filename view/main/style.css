@@ -1,11 +1,11 @@
 :root {
   color-scheme: light;
-  --page-ink: #14263d;
-  --page-muted: #607086;
-  --page-navy: #172b45;
-  --page-orange: #ff7a2f;
-  --page-canvas: #f6f8fb;
-  --page-white: #ffffff;
+  --page-ink: #35281c;
+  --page-muted: #8c715a;
+  --page-navy: #3c2d20;
+  --page-orange: #b77b49;
+  --page-canvas: #fbf8f6;
+  --page-white: #fdfbfa;
 }
 
 *,
@@ -46,8 +46,8 @@ img {
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.7rem 1rem;
-  color: #fff;
-  background: #172b45;
+  color: #fdfbfa;
+  background: #3c2d20;
   border-radius: 10px;
   text-decoration: none;
   transform: translateY(-160%);
@@ -59,8 +59,8 @@ img {
 }
 
 ::selection {
-  color: #fff;
-  background: #2d65aa;
+  color: #fdfbfa;
+  background: #836a54;
 }
 
 @media (prefers-reduced-motion: reduce) {

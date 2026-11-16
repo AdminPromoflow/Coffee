@@ -13,14 +13,14 @@ h1 {
 
 .field {
 	margin: 0;
-  color: #111827;
+  color: #241b14;
 }
 
 label {
 	display: block;
 	color: var(--muted);
 	margin:5px 0;
-  color: #111827;
+  color: #241b14;
 }
 
 input {
@@ -28,14 +28,14 @@ input {
 	padding: 1rem .6rem;
 	border-radius: 5px;
 	border: 1px solid #000;
-	color: #111827;
+	color: #241b14;
 	outline: none;
 	transition: border-color .2s, box-shadow .2s;
 }
 
 input:focus {
-	border-color: #111827;
-  color: #111827;
+	border-color: #241b14;
+  color: #241b14;
 }
 
 .row {
@@ -62,7 +62,7 @@ input:focus {
 	border-radius: 12px;
 	border: none;
 	cursor: pointer;
-	background: #111827;
+	background: #241b14;
 	color: white;
 	font-weight: 700;
 	letter-spacing: .02em;

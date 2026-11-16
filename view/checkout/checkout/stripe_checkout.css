@@ -3,8 +3,8 @@
   display:block;
   padding:20px;
   border-style:solid;
-  border-color:#dddcef;
-  background:linear-gradient(135deg,rgba(99,91,255,.035),#fff);
+  border-color:#f0e5db;
+  background:linear-gradient(135deg,rgba(191, 172, 155,.035),#fdfbfa);
 }
 
 .stripe-element-container{
@@ -16,28 +16,28 @@
   display:flex;
   align-items:center;
   gap:14px;
-  color:#4b5563;
+  color:#71553d;
 }
 
 .stripe-loading-state > span{
   width:38px;
   height:38px;
   flex:0 0 38px;
-  border:3px solid rgba(99,91,255,.18);
-  border-top-color:#635bff;
+  border:3px solid rgba(191, 172, 155,.18);
+  border-top-color:#bfac9b;
   border-radius:50%;
   animation:stripe-checkout-spin .9s linear infinite;
 }
 
 .stripe-loading-state strong{
   display:block;
-  color:#332f78;
+  color:#6d523a;
   font-size:.88rem;
 }
 
 .stripe-loading-state p{
   margin:4px 0 0;
-  color:#6b7280;
+  color:#8f745c;
   font-size:.76rem;
 }
 
@@ -64,7 +64,7 @@
 
 .stripe-payment-message{
   margin:13px 0 0;
-  color:#475569;
+  color:#72563e;
   font-size:.75rem;
 }
 
@@ -85,8 +85,8 @@
 .summary-line-discount strong{color:#166534!important}
 
 .pay-button.is-loading svg{
-  border:2px solid rgba(255,255,255,.35);
-  border-top-color:#fff;
+  border:2px solid rgba(253, 251, 250,.35);
+  border-top-color:#fdfbfa;
   border-radius:50%;
   animation:stripe-checkout-spin .8s linear infinite;
 }

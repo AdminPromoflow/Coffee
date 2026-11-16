@@ -4,14 +4,14 @@
 ============================================================================= */
 
 :root{
-  --cart-bg:#f3f4f6;
-  --cart-panel:#ffffff;
-  --cart-panel-soft:#f8fafc;
-  --cart-text:#111827;
-  --cart-text-soft:#374151;
-  --cart-muted:#6b7280;
-  --cart-border:#e5e7eb;
-  --cart-border-strong:#d1d5db;
+  --cart-bg:#f9f4f0;
+  --cart-panel:#fdfbfa;
+  --cart-panel-soft:#fdfbfa;
+  --cart-text:#241b14;
+  --cart-text-soft:#584330;
+  --cart-muted:#8f745c;
+  --cart-border:#f1e7df;
+  --cart-border-strong:#e6d5c6;
 
   --cart-danger:#b42318;
   --cart-danger-soft:#fff4f2;
@@ -36,8 +36,8 @@
 
   --cart-radius:18px;
   --cart-radius-small:14px;
-  --cart-shadow:0 16px 38px rgba(15, 23, 42, .08);
-  --cart-shadow-soft:0 10px 24px rgba(15, 23, 42, .06);
+  --cart-shadow:0 16px 38px rgba(37, 28, 20, .08);
+  --cart-shadow-soft:0 10px 24px rgba(37, 28, 20, .06);
 }
 
 /* =============================================================================
@@ -91,7 +91,7 @@ svg{
   width:100%;
   min-height:100vh;
   padding:clamp(100px, 10vw, 130px) 16px 60px;
-  background:linear-gradient(180deg, #f8fafc 0%, #f3f4f6 100%);
+  background:linear-gradient(180deg, #fdfbfa 0%, #f9f4f0 100%);
 }
 
 .shopping-cart-shell{
@@ -163,7 +163,7 @@ svg{
   gap:8px;
   padding:11px 16px;
   color:var(--cart-text-soft);
-  background:#ffffff;
+  background:#fdfbfa;
   border:1px solid var(--cart-border);
   border-radius:13px;
   box-shadow:var(--cart-shadow-soft);
@@ -177,7 +177,7 @@ svg{
   transform:translateY(-2px);
   color:var(--accent-hover);
   border-color:var(--accent-border);
-  box-shadow:0 14px 28px rgba(15, 23, 42, .09);
+  box-shadow:0 14px 28px rgba(37, 28, 20, .09);
 }
 
 .continue-shopping-link:focus-visible{
@@ -270,17 +270,17 @@ svg{
   gap:20px;
   padding:18px;
   overflow:hidden;
-  background:linear-gradient(145deg, #ffffff 0%, #fbfbfa 100%);
+  background:linear-gradient(145deg, #fdfbfa 0%, #fdfbfa 100%);
   border:1px solid var(--cart-border);
   border-radius:17px;
-  box-shadow:0 8px 20px rgba(15, 23, 42, .05);
+  box-shadow:0 8px 20px rgba(37, 28, 20, .05);
   transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease, opacity .25s ease;
 }
 
 .cart-item:hover{
   transform:translateY(-2px);
   border-color:var(--accent-border);
-  box-shadow:0 14px 28px rgba(15, 23, 42, .08);
+  box-shadow:0 14px 28px rgba(37, 28, 20, .08);
 }
 
 .cart-item.is-removing{
@@ -299,7 +299,7 @@ svg{
   display:grid;
   place-items:center;
   overflow:hidden;
-  background:#f9fafb;
+  background:#fdfbfa;
   border:1px solid var(--cart-border);
   border-radius:15px;
 }
@@ -464,7 +464,7 @@ svg{
   display:grid;
   grid-template-columns:40px 1fr 40px;
   overflow:hidden;
-  background:#ffffff;
+  background:#fdfbfa;
   border:1px solid var(--cart-border-strong);
   border-radius:12px;
 }
@@ -503,7 +503,7 @@ svg{
   min-width:0;
   padding:0 4px;
   color:var(--cart-text);
-  background:#ffffff;
+  background:#fdfbfa;
   border:0;
   border-right:1px solid var(--cart-border);
   border-left:1px solid var(--cart-border);
@@ -564,7 +564,7 @@ svg{
   display:grid;
   gap:20px;
   padding:24px;
-  background:#ffffff;
+  background:#fdfbfa;
   border:1px solid var(--cart-border);
   border-radius:var(--cart-radius);
   box-shadow:var(--cart-shadow);
@@ -640,7 +640,7 @@ svg{
   height:42px;
   padding:0 12px;
   color:var(--cart-text);
-  background:#ffffff;
+  background:#fdfbfa;
   border:1px solid var(--cart-border-strong);
   border-radius:11px;
   outline:0;
@@ -668,7 +668,7 @@ svg{
 
 .promo-code-control button:hover{
   transform:translateY(-1px);
-  color:#ffffff;
+  color:#fdfbfa;
   background:var(--accent);
 }
 
@@ -708,10 +708,10 @@ svg{
   justify-content:space-between;
   gap:18px;
   padding:17px;
-  color:#ffffff;
-  background:linear-gradient(145deg, #1f2937 0%, #25364a 100%);
+  color:#fdfbfa;
+  background:linear-gradient(145deg, #382a1e 0%, #483627 100%);
   border-radius:16px;
-  box-shadow:0 12px 24px rgba(15, 23, 42, .16);
+  box-shadow:0 12px 24px rgba(37, 28, 20, .16);
 }
 
 .summary-total > div{
@@ -725,13 +725,13 @@ svg{
 }
 
 .summary-total small{
-  color:rgba(255, 255, 255, .68);
+  color:rgba(253, 251, 250, .68);
   font-size:.72rem;
 }
 
 .summary-total strong{
   flex:0 0 auto;
-  color:#ffffff;
+  color:#fdfbfa;
   font-size:1.6rem;
   font-weight:850;
   line-height:1;
@@ -752,7 +752,7 @@ svg{
   gap:10px;
   padding:12px 18px;
   cursor:pointer;
-  color:#ffffff;
+  color:#fdfbfa;
   background:var(--accent);
   border:1px solid var(--accent);
   border-radius:14px;
@@ -872,11 +872,11 @@ svg{
   opacity:0;
   visibility:hidden;
   transform:translateY(16px);
-  color:#ffffff;
-  background:#1f2937;
-  border:1px solid rgba(255, 255, 255, .1);
+  color:#fdfbfa;
+  background:#382a1e;
+  border:1px solid rgba(253, 251, 250, .1);
   border-radius:13px;
-  box-shadow:0 16px 34px rgba(15, 23, 42, .22);
+  box-shadow:0 16px 34px rgba(37, 28, 20, .22);
   font-size:.9rem;
   font-weight:650;
   transition:opacity .25s ease, visibility .25s ease, transform .25s ease;

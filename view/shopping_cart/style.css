@@ -3,8 +3,8 @@
 ============================================================================= */
 
 :root{
-  --shopping-page-bg:#f3f4f6;
-  --shopping-page-text:#111827;
+  --shopping-page-bg:#f9f4f0;
+  --shopping-page-text:#241b14;
 }
 
 *,
@@ -52,7 +52,7 @@ svg{
 
 .shopping-cart-body{
   min-height:100vh;
-  background:linear-gradient(180deg, #f8fafc 0%, #f3f4f6 100%);
+  background:linear-gradient(180deg, #fdfbfa 0%, #f9f4f0 100%);
 }
 
 .shopping-cart-file-error{
