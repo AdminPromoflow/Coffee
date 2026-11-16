@@ -1,0 +1,280 @@
+<?php
+
+class Resques63API
+{
+  public function handleResques63API()
+  {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $input = file_get_contents('php://input');
+    $data  = json_decode($input, true);
+
+    if (!is_array($data)) {
+      echo json_encode([
+        'success' => false,
+        'error' => 'Invalid JSON payload.'
+      ]);
+      exit;
+    }
+
+    Dot63Security::post();
+    Dot63Security::reviewer();
+    if (in_array($data['action'] ?? '', ['approve_product', 'publish_product'], true)) {
+      Dot63Security::csrf($data);
+    }
+
+    switch ($data["action"] ?? null) {
+      case 'get_review_preview':
+      case 'get_review_variation_children':
+      case 'get_review_variation_prices':
+        require_once __DIR__ . '/../order/product.php';
+        try {
+          (new Product())->handleReview($data);
+        } catch (Throwable $error) {
+          error_log('Product review error: ' . $error->getMessage());
+          http_response_code(500);
+          echo json_encode(['success' => false, 'error' => 'The product preview could not be loaded. Please try again.']);
+        }
+        break;
+
+      case 'get_API_overview_data':
+        $this->getAPIOverviewData($data);
+        break;
+
+      case 'get_preview_product_details':
+        $this->getPreviewProductDetails($data);
+        break;
+
+      case 'approve_product':
+        $this->approveProduct($data);
+        break;
+
+      case 'publish_product':
+        $this->publishProduct($data);
+        break;
+
+      case 'get_variation_children_by_id':
+        $this->getVariationChildrenById($data);
+        break;
+
+      case 'get_variation_prices':
+        $this->getVariationPrices($data);
+        break;
+
+        case 'get_suppliers':
+          $this->getSuppliers($data);
+          break;
+
+      default:
+        echo json_encode([
+          'success' => false,
+          'error' => 'Unsupported action.'
+        ]);
+        break;
+    }
+
+    exit;
+  }
+
+  private function getSuppliers($data)
+  {
+    $connection = new Database();
+    $user = new Users($connection);
+
+    $result = $user->getAllUsers();
+
+    echo json_encode($result);
+    exit;
+  }
+
+  private function approveProduct($data)
+  {
+    $this->publishProduct($data);
+  }
+
+  private function getAPIOverviewData($data)
+  {
+    $connection = new Database();
+    $product = new Products($connection);
+
+    $result = $product->getPendingProducts();
+
+    echo json_encode($result);
+    exit;
+  }
+
+  private function publishProduct($data)
+  {
+    try {
+      if (empty($data['sku']) || !isset($data['status_request_version'], $data['requested_status'])
+          || filter_var($data['status_request_version'], FILTER_VALIDATE_INT) === false
+          || !in_array($data['requested_status'], [0, 1, 2, 3, '0', '1', '2', '3'], true)) {
+        throw new InvalidArgumentException('Reload the product and review the pending status before approving.', 422);
+      }
+      $result = (new ProductStatus(new Database()))->approve(
+        (string)$data['sku'], (int)$data['status_request_version'], (int)$data['requested_status']
+      );
+      echo json_encode($result);
+    } catch (Throwable $error) {
+      $code = (int)$error->getCode();
+      http_response_code(in_array($code, [404, 409, 422], true) ? $code : 500);
+      if (!in_array($code, [404, 409, 422], true)) error_log('Approval failed: ' . $error->getMessage());
+      echo json_encode(['success' => false, 'message' => in_array($code, [404, 409, 422], true) ? $error->getMessage() : 'Unable to approve this change.']);
+    }
+    exit;
+  }
+
+  private function getPreviewProductDetails($data)
+  {
+    if (empty($data['sku'])) {
+      echo json_encode([
+        'success' => false,
+        'message' => 'SKU is missing.'
+      ]);
+      exit;
+    }
+
+    $connection = new Database();
+    $user = new Users($connection);
+    $user->setSKU($data['sku']);
+    $company = $user->getUserCompanyBySKU();
+
+    $connection = new Database();
+    $category = new Categories($connection);
+    $category->setSKU($data['sku']);
+    $category_name = $category->getCategoryNameBySKU();
+
+    $connection = new Database();
+    $group = new Groups($connection);
+    $group->setSKU($data['sku']);
+    $group_name = $group->getGroupNameBySKU();
+
+    $connection = new Database();
+    $product = new Products($connection);
+    $product->setSku($data['sku']);
+    $product_details = $product->getProductDetailsBySKU();
+
+    $connection = new Database();
+    $variation = new Variation($connection);
+    $variation->setSku($data['sku']);
+    $variation_details = $variation->getVariationsIdBySKUProduct();
+
+    echo json_encode([
+      $company,
+      $category_name,
+      $group_name,
+      $product_details,
+      $variation_details
+    ]);
+    exit;
+  }
+
+  private function getVariationChildrenById($data)
+  {
+    if (empty($data['variation_id'])) {
+      echo json_encode([
+        'success' => false,
+        'message' => 'Variation ID is missing.'
+      ]);
+      exit;
+    }
+
+    $connection = new Database();
+    $variation = new Variation($connection);
+    $variation->setVariationId($data['variation_id']);
+    $childVariations = $variation->getVariationChildrenById();
+
+    $connection = new Database();
+    $variation = new Variation($connection);
+    $variation->setVariationId($data['variation_id']);
+    $currentVariationData = $variation->getDetailsCurrentVariationById();
+
+    $connection = new Database();
+    $variation = new Variation($connection);
+    $variation->setVariationId($data['variation_id']);
+    $variationTypes = $variation->getTypeVariationsChildByVariationId();
+
+    $connection = new Database();
+    $variation = new Variation($connection);
+    $variation->setVariationId($data['variation_id']);
+    $variationTypesForDelete = $variation->getTypeVariationsChildByVariationIdForDelete();
+
+    echo json_encode([
+      'childVariations' => $childVariations,
+      'currentVariationData' => $currentVariationData,
+      'variationTypes' => $variationTypes,
+      'variationTypesForDelete' => $variationTypesForDelete
+    ]);
+    exit;
+  }
+
+  private function getVariationPrices($data)
+  {
+    if (empty($data["ids"]) || !is_array($data["ids"])) {
+      echo json_encode([
+        'success' => false,
+        'message' => 'Variation IDs are missing.'
+      ]);
+      exit;
+    }
+
+    $connection = new Database();
+    $prices = new Prices($connection);
+
+    $arrayPrices = [];
+
+    foreach ($data["ids"] as $id) {
+      $id = (int) $id;
+
+      if ($id <= 0) {
+        continue;
+      }
+
+      $prices->setVariationId($id);
+      $prices->setMaxQuantity($data["max_quantity"] ?? null);
+
+      $price = $prices->getPricesByIdVariation();
+
+      if ($price === null) {
+        continue;
+      }
+
+      $arrayPrices[] = [
+        'variation_id' => $id,
+        'price' => $price
+      ];
+    }
+
+    echo json_encode([
+      'success' => true,
+      'prices' => $arrayPrices
+    ]);
+    exit;
+  }
+}
+
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../../model/products.php';
+require_once __DIR__ . '/../../model/users.php';
+require_once __DIR__ . '/../../model/categories.php';
+require_once __DIR__ . '/../../model/groups.php';
+require_once __DIR__ . '/../../model/variations.php';
+require_once __DIR__ . '/../../model/prices.php';
+
+$payload = json_decode(file_get_contents("php://input"), true);
+
+if (is_array($payload)) {
+  $apiHandler = new Resques63API();
+  $apiHandler->handleResques63API();
+} else {
+  header('Content-Type: application/json; charset=utf-8');
+
+  echo json_encode([
+    'success' => false,
+    'error' => 'No valid payload received.'
+  ]);
+
+  exit;
+}
+
+?>

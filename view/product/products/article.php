@@ -1,0 +1,43 @@
+<?php
+$cssTime = filemtime('../../view/product/products/article.css');
+$jsTime = filemtime('../../view/product/products/article.js');
+?>
+<link rel="stylesheet" href="../../view/product/products/article.css?v=<?= $cssTime ?>">
+
+<section class="all_product">
+  <div class="products">
+
+    <input type="checkbox" id="filters-open" class="filters-toggle" hidden>
+    <label for="filters-open" class="filters-btn"></label>
+
+    <div class="filter_products">
+      <h1>Filters</h1>
+
+      <div class="filters-content">
+        <div class="filter-groups">
+          <div id="variation-filters"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="articles" id="articles">
+      <div class="products-search-panel">
+        <label for="product-search">Search products</label>
+        <div class="products-search-controls">
+          <input
+            type="search"
+            id="product-search"
+            placeholder="Search by product, category or group..."
+            autocomplete="off"
+          >
+          <button id="product-search-button" type="button">Search</button>
+        </div>
+      </div>
+
+      <h1>All Products</h1>
+    </div>
+
+  </div>
+</section>
+
+<script src="../../view/product/products/article.js?v=<?= $jsTime ?>" type="text/javascript"></script>

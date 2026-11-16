@@ -1,0 +1,164 @@
+/* [Customer 7.3.3] Crea la tarjeta del PDF de producción asociado a una variación. */
+export class ArtworkRenderer {
+  constructor(rootId = "wrap-artworks-group") {
+    this.root = document.getElementById(rootId);
+    this.confirmationTemplates = document.getElementById("artwork_confirmation_templates");
+    this.confirmationLinks = document.getElementById("artwork_confirmation_template_links");
+    this.templateUrls = new Set();
+  }
+
+  clear() {
+    // [Customer 7.3.3.1] Los archivos siempre se reconstruyen según la ruta seleccionada.
+    if (this.root) this.root.innerHTML = "";
+    this.confirmationLinks?.replaceChildren();
+    if (this.confirmationTemplates) this.confirmationTemplates.hidden = true;
+    this.templateUrls.clear();
+  }
+
+  render(row = {}, context = {}) {
+    // [Customer 7.3.3.2] Sin nombre ni archivo no existe una tarjeta útil que mostrar.
+    if (!this.root) return false;
+
+    const name = String(row?.name_pdf_artwork ?? "").trim();
+    const href = this.resolveAssetPath(row?.pdf_artwork);
+    if (!name && !href) return false;
+
+    const card = document.createElement("article");
+    card.className = "sp-artwork-card";
+
+    const icon = document.createElement("span");
+    icon.className = "sp-artwork-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "PDF";
+
+    const copy = document.createElement("div");
+    copy.className = "sp-artwork-copy";
+
+    const title = document.createElement("strong");
+    title.textContent = name || `${context.variationName || "Variation"} artwork template`;
+    copy.appendChild(title);
+
+    if (context.variationName) {
+      const meta = document.createElement("span");
+      meta.textContent = context.variationName;
+      copy.appendChild(meta);
+    }
+
+    card.append(icon, copy);
+
+    if (href) {
+      // [Customer 7.3.3.3] Descarga el PDF sin abrir otra ventana, también en Safari.
+      const link = document.createElement("a");
+      link.className = "btn btn-secondary btn-compact";
+      link.href = href;
+      link.download = "";
+      link.textContent = "Download template";
+      card.appendChild(link);
+      if (this.confirmationLinks && !this.templateUrls.has(href)) {
+        const download = link.cloneNode(true);
+        download.className = "artwork-confirmation-template-link";
+        download.textContent = `Download template — ${title.textContent}`;
+        // External PDFs may ignore download; keep the customer's selection open.
+        download.target = "_blank";
+        download.rel = "noopener noreferrer";
+        this.confirmationLinks.appendChild(download);
+        this.confirmationTemplates.hidden = false;
+        this.templateUrls.add(href);
+      }
+    }
+
+    this.root.appendChild(card);
+    return true;
+  }
+
+  resolveAssetPath(rawPath = "") {
+    // [Customer 7.3.3.4] Se aceptan URLs completas y se normalizan rutas internas del controller.
+    const path = String(rawPath ?? "").trim().replace(/^\/+/, "");
+    if (!path) return "";
+
+    if (/^(https?:|data:|blob:)/i.test(path)) return path;
+    if (path.startsWith("controller/")) return `../../${path}`;
+    return `../../controller/${path}`;
+  }
+}
+
+export class ArtworkUpload {
+  constructor() {
+    this.input = document.getElementById("artwork_pdf");
+    this.status = document.getElementById("artwork_upload_status");
+    this.remove = document.getElementById("artwork_remove");
+    this.shortcut = document.getElementById("artwork_upload_shortcut");
+    this.summary = document.getElementById("artwork_summary");
+    this.dialog = document.getElementById("artwork_confirmation");
+    this.confirmation = null;
+    this.input?.addEventListener("change", () => this.validateSelection());
+    this.shortcut?.addEventListener("click", () => this.chooseFile());
+    document.getElementById("artwork_confirm_upload")?.addEventListener("click", () => {
+      this.dialog.close("upload");
+      // Open the chooser inside this click so browsers retain the user gesture.
+      this.chooseFile();
+    });
+    document.getElementById("artwork_confirm_continue")?.addEventListener("click", () => this.dialog.close("continue"));
+    document.getElementById("artwork_confirm_cancel")?.addEventListener("click", () => this.dialog.close("cancel"));
+    this.remove?.addEventListener("click", () => {
+      this.input.value = "";
+      this.validateSelection();
+    });
+  }
+
+  chooseFile() {
+    if (!this.input || this.input.disabled) return;
+    document.getElementById("artwork_section")?.scrollIntoView({ block: "center" });
+    this.input.focus({ preventScroll: true });
+    this.input.click();
+  }
+
+  confirmWithoutArtwork() {
+    if (this.confirmation) return this.confirmation;
+    if (!this.dialog) return Promise.resolve(false);
+    this.confirmation = new Promise(resolve => {
+      this.dialog.addEventListener("close", () => {
+        this.confirmation = null;
+        resolve(this.dialog.returnValue === "continue");
+      }, { once: true });
+      // Escape must never inherit a previous confirmation.
+      this.dialog.returnValue = "cancel";
+      this.dialog.showModal();
+    });
+    return this.confirmation;
+  }
+
+  getFile() {
+    return this.input?.files?.[0] || null;
+  }
+
+  validateSelection() {
+    const file = this.getFile();
+    let error = "";
+    if (file && !/\.pdf$/i.test(file.name)) error = "Please choose a PDF file.";
+    else if (file && (file.size === 0 || file.size > 8 * 1024 * 1024)) error = "Choose a non-empty PDF up to 8 MB.";
+    this.input?.setCustomValidity(error);
+    this.input?.setAttribute("aria-invalid", String(Boolean(error)));
+    if (this.remove) this.remove.hidden = !file;
+    if (this.shortcut) this.shortcut.textContent = file ? "Change artwork" : "Upload artwork";
+    if (this.summary) this.summary.textContent = error || (file ? file.name : "No artwork uploaded. You can upload your PDF before continuing.");
+    this.setStatus(error || (file ? `${file.name} · Ready to upload with this product.` : "No artwork selected."), error ? "error" : "info");
+    return !error;
+  }
+
+  setStatus(message, tone = "info") {
+    if (!this.status) return;
+    this.status.textContent = message;
+    this.status.dataset.tone = tone;
+  }
+
+  setPending(pending) {
+    if (this.input) this.input.disabled = pending;
+    if (this.remove) this.remove.disabled = pending;
+    if (this.shortcut) this.shortcut.disabled = pending;
+  }
+
+  markSaved(file) {
+    if (file && this.getFile() === file) this.setStatus(`${file.name} · Saved with the product in your cart.`);
+  }
+}

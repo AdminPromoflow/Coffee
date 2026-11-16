@@ -1,0 +1,343 @@
+class Images {
+  constructor() {
+    if (window.ImageLogic) {
+      this.logic = new window.ImageLogic(this);
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      // ===== Toggle menú "Variations" =====
+      const menuBtn = document.getElementById('menu_btn');
+      const menuList = document.getElementById('menu_list');
+      this.menuBtn = menuBtn;
+      this.menuList = menuList;
+
+      // Event listener para botón Back
+      const btnBackImages = document.getElementById("btn_back_images");
+      if (btnBackImages) {
+        btnBackImages.addEventListener("click", () => {
+          window.headerAddProduct.goNext('../../view/variations/index.php');
+        });
+      }
+      if (menuBtn && menuList) {
+        // Abrir/cerrar con clic
+        menuBtn.addEventListener('click', e => this.handleMenuBtnClick(e, menuList, menuBtn));
+
+        // Cerrar al hacer clic fuera
+        document.addEventListener('click', e => this.handleDocumentClick(e, menuBtn, menuList));
+
+        // Cerrar con Escape
+        document.addEventListener('keydown', e => this.handleDocumentKeydown(e, menuList, menuBtn));
+      }
+      {
+        const $ = s => document.querySelector(s);
+        const form = $('#variationImagesForm');
+        if (form) {
+          const dropzone = $('#dropzone');
+          const pickBtn = $('#pick_files');
+          const fileInput = $('#images_input');
+          const gallery = $('#gallery');
+          this.gallery = gallery;
+
+          // Config
+          // Config
+          this.MAX_SIZE = 10 * 1024 * 1024; // 10MB
+          // 10MB
+          this.ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+
+          // Eventos (append-only)
+          // Eventos (append-only)
+          pickBtn?.addEventListener('click', () => fileInput.click());
+          fileInput?.addEventListener('change', e => this.addLocalFiles(e.target.files));
+          const block = e => {
+            e.preventDefault();
+            e.stopPropagation();
+          };
+          ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropzone?.addEventListener(ev, block));
+          ['dragenter', 'dragover'].forEach(ev => dropzone?.addEventListener(ev, () => dropzone.classList.add('is-dragover')));
+          ['dragleave', 'drop'].forEach(ev => dropzone?.addEventListener(ev, () => dropzone.classList.remove('is-dragover')));
+          dropzone?.addEventListener('drop', e => this.addLocalFiles(e.dataTransfer.files));
+
+          // Delegación para quitar
+          // Delegación para quitar
+          this.gallery?.addEventListener('click', e => this.handleGalleryClick(e));
+        }
+      }
+    });
+    document.addEventListener("error", event => this.handleThumbnailError(event), true);
+  }
+
+  // ====== Estado y utilidades ======
+  items = []; // {id, url, name, size, origin: 'server'|'local', file?}
+
+  uid() {
+    return Math.random().toString(36).slice(2, 10);
+  }
+
+  humanSize(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n)) return '';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0,
+      v = n;
+    while (v >= 1024 && i < u.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
+  }
+
+  // ====== Pinta una miniatura al final (sin limpiar) ======
+
+  appendThumb(it) {
+    const fig = document.createElement('figure');
+    fig.className = 'cp-thumb';
+    fig.dataset.id = it.id;
+    const sizeTxt = Number.isFinite(Number(it.size)) ? ` • ${this.humanSize(it.size)}` : '';
+    const displayName = it.name || it.url.split('/').pop()?.split('?')[0] || 'Imagen';
+    const img = document.createElement('img');
+    img.className = 'thumb-img';
+    const imageURL = new URL(it.url, location.href);
+    if (['http:', 'https:', 'blob:'].includes(imageURL.protocol)) img.src = imageURL.href;
+    img.alt = displayName;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.width = 80;
+    img.height = 80;
+    const remove = document.createElement('button');
+    remove.className = 'rm';
+    remove.type = 'button';
+    remove.dataset.id = String(it.id);
+    remove.setAttribute('aria-label', 'Quitar imagen');
+    remove.textContent = '×';
+    const caption = document.createElement('figcaption');
+    caption.className = 'meta';
+    caption.title = displayName;
+    caption.textContent = displayName + sizeTxt;
+    const mainLabel = document.createElement('label');
+    mainLabel.className = 'cp-main-toggle';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = Number(it.show_on_product_main) === 1;
+    checkbox.setAttribute('aria-label', `Show on main: ${displayName}`);
+    const text = document.createElement('span');
+    text.textContent = 'Show on main';
+    const status = document.createElement('small');
+    status.className = 'cp-main-status';
+    status.setAttribute('role', 'status');
+    checkbox.addEventListener('change', async () => {
+      const previous = Number(it.show_on_product_main) === 1 ? 1 : 0;
+      if (this.logic?.uploading) { checkbox.checked = previous === 1; return; }
+      it.show_on_product_main = checkbox.checked ? 1 : 0;
+      if (it.origin === 'local') {
+        status.textContent = 'Save to upload';
+        return;
+      }
+      checkbox.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        await this.logic.updateMainVisibility(it.image_id, it.show_on_product_main);
+        status.textContent = 'Saved';
+      } catch (error) {
+        it.show_on_product_main = previous;
+        checkbox.checked = previous === 1;
+        status.textContent = 'Not saved. Try again.';
+      } finally {
+        checkbox.disabled = false;
+      }
+    });
+    mainLabel.append(checkbox, text);
+    fig.append(img, remove, caption, mainLabel, status);
+    this.gallery.appendChild(fig);
+    return fig;
+  }
+
+  // ====== Agrega archivos locales (input/drag) → apéndice ======
+
+  addLocalFiles(fileList) {
+    Array.from(fileList || []).forEach(f => {
+      if (!this.ACCEPTED.includes(f.type)) {
+        alert(`Unsupported type: ${f.type}`);
+        return;
+      }
+      if (f.size > this.MAX_SIZE) {
+        alert(`${f.name} is too large (${this.humanSize(f.size)}).`);
+        return;
+      }
+      const it = {
+        id: this.uid(),
+        url: URL.createObjectURL(f),
+        name: f.name,
+        size: f.size,
+        show_on_product_main: 0,
+        origin: 'local',
+        file: f
+      };
+      this.items.push(it);
+      this.appendThumb(it); // 👈 apéndice (no limpia)
+    });
+  }
+
+  // ====== Quitar por id (DOM + estado) ======
+
+  removeById(id) {
+    const btn = document.querySelector(`button[data-id="${CSS.escape(id)}"]`);
+    if (!btn) return -1;
+
+    // 2) Toma la primera clase del botón
+    const cls = btn.classList[0];
+    if (!cls) return -1;
+
+    // 3) Busca todos los botones con esa misma clase
+    const list = Array.from(document.querySelectorAll(`button.${CSS.escape(cls)}`));
+
+    // 4) Devuelve el índice del botón dentro de esa lista (0, 1, 2, ...)
+    var index = list.indexOf(btn);
+
+    // Usar el mismo índice para obtener la imagen correspondiente
+    const img = document.querySelectorAll(".thumb-img")[index];
+    let src = img?.getAttribute('src') || img?.getAttribute('data-src') || img?.getAttribute('data-original') || img?.currentSrc || '';
+    src = src.replace(/^(\.\.\/){2}/, "");
+
+    // 'src' es string: obtener pathname con URL para extraer el nombre
+    const filename = new URL(src, window.location.href).pathname.split('/').pop();
+    const name = decodeURIComponent(filename);
+    const allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+    // obtener extensión (sin el punto)
+    const ext = name.split('.').pop().toLowerCase();
+
+    // verificar si NO tiene extensión o NO está permitida
+    const validExt = name.includes('.') && allowed.includes(ext);
+    if (validExt) {
+      this.logic?.deleteImage(src);
+    }
+    const idx = this.items.findIndex(x => x.id === id);
+    if (idx === -1) return;
+    const it = this.items[idx];
+    if (it.origin === 'local') URL.revokeObjectURL(it.url);
+    this.items.splice(idx, 1);
+    this.gallery.querySelector(`[data-id="${id}"]`)?.remove();
+  }
+
+  // (Opcional) Re-render total si alguna vez lo necesitas
+
+  renderAll() {
+    this.gallery.innerHTML = '';
+    this.items.forEach(it => this.appendThumb(it));
+  }
+  renderedIds = new Set();
+
+  basename(p) {
+    return String(p || '').split('/').pop()?.split('?')[0] || '';
+  }
+
+  normalizeUrl(link) {
+    // Tu link viene como "controller/uploads/..." y tu vista está en "view/images/"
+    // Por eso anteponemos "../../" para llegar a /controller/...
+    if (!link) return '';
+    return link.startsWith('http') ? link : `../../${String(link).replace(/^\/+/, '')}`;
+  }
+
+  // ====== (Opcional) wrapper para agregar una imagen del servidor manualmente ======
+
+  renderImage(size, name, url, imageId = null, showOnMain = 0) {
+    if (!url || !this.gallery) return null;
+    const it = {
+      id: this.uid(),
+      url,
+      name,
+      size,
+      image_id: imageId,
+      show_on_product_main: Number(showOnMain) === 1 ? 1 : 0,
+      origin: 'server'
+    };
+    this.items.push(it);
+    const el = this.appendThumb(it);
+    return {
+      id: it.id,
+      el
+    };
+  }
+
+  // ====== Helpers del menú (sin cambios de lógica) ======
+
+  parseNameSkuFromText(text) {
+    const raw = (text ?? '').toString().trim();
+    if (raw === '') return {
+      name: '',
+      sku: ''
+    };
+    const skuPattern = /[A-Z]{3,}-\d{8}-\d{6}-\d{6}-[A-F0-9]{10}/i;
+    const anyMatch = raw.match(skuPattern);
+    if (anyMatch) {
+      const sku = anyMatch[0].trim();
+      const name = raw.replace(skuPattern, '').replace(/[—–\-:()\s]+$/, '').trim();
+      return {
+        name: name.replace(/[—–\-:]\s*$/, '').trim(),
+        sku
+      };
+    }
+    const sepPattern = /\s*[—–\-:]\s*/;
+    const parts = raw.split(sepPattern).filter(Boolean);
+    if (parts.length >= 2) {
+      const last = parts[parts.length - 1].trim();
+      if (skuPattern.test(last)) {
+        parts.pop();
+        const sku = last;
+        const name = parts.join(' — ').trim();
+        return {
+          name,
+          sku
+        };
+      }
+    }
+    const mParen = raw.match(/\(([^)]+)\)\s*$/);
+    if (mParen && skuPattern.test(mParen[1])) {
+      const sku = mParen[1].trim();
+      const name = raw.slice(0, mParen.index).trim();
+      return {
+        name,
+        sku
+      };
+    }
+    return {
+      name: raw,
+      sku: ''
+    };
+  }
+
+  handleThumbnailError(event) {
+    const image = event.target;
+    if (!image.matches?.("#gallery .thumb-img")) return;
+    image.closest(".cp-thumb")?.classList.add("broken");
+  }
+
+  handleMenuBtnClick(e, menuList, menuBtn) {
+    e.stopPropagation();
+    const isHidden = menuList.hidden;
+    menuList.hidden = !isHidden;
+    menuBtn.setAttribute('aria-expanded', String(!isHidden));
+  }
+
+  handleDocumentClick(e, menuBtn, menuList) {
+    if (!menuBtn.contains(e.target) && !menuList.contains(e.target)) {
+      if (!menuList.hidden) {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
+
+  handleDocumentKeydown(e, menuList, menuBtn) {
+    if (e.key === 'Escape' && !menuList.hidden) {
+      menuList.hidden = true;
+      menuBtn.setAttribute('aria-expanded', 'false');
+      menuBtn.focus();
+    }
+  }
+
+  handleGalleryClick(e) {
+    const btn = e.target.closest('.rm');
+    if (btn) this.removeById(btn.dataset.id);
+  }
+}
+const imagesClass = new Images();

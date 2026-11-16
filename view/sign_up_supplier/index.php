@@ -1,0 +1,30 @@
+<?php require_once __DIR__ . '/../../controller/security/bootstrap.php'; ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <?php require __DIR__ . '/../global/security/page_head.php'; ?>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="description" content="Promoflow - Diseño de páginas web y ecommerce en Colombia" />
+  <meta name="author" content="Promoflow" />
+  <meta name="keywords" content="páginas web, diseño web, emprendedores, ecommerce, Colombia" />
+
+  <title>Sign Up Supplier</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png" />
+
+  <link rel="stylesheet" href="../../view/sign_up_supplier/style.css?v=<?php echo filemtime("../../view/sign_up_supplier/style.css"); ?>">
+</head>
+
+<body class="body_sigUp_Supplier">
+  <?php include "../../view/global/PageLoader/PageLoader.php" ?>
+  <?php include "../../view/global/menu_supplier/menu_general.php"; ?>
+  <?php include "../../view/sign_up_supplier/sign_up_supplier/sign_up_supplier.php";?>
+  <?php include "../../view/global/supplier_auth/supplier_auth.php"; ?>
+</body>
+</html>

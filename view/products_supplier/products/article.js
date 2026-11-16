@@ -1,0 +1,317 @@
+class ProductsSupplierClass {
+  constructor() {
+    // 🔹 Elementos del DOM para filtros / contador / orden
+    this.form = document.getElementById("product-filters");
+    this.count = document.getElementById("product-count");
+    this.sortSelect = document.getElementById("sort-select");
+    this.supplierProducts = [];
+
+    // 🔹 Enlazar eventos de click/teclado en filas + filtros/orden
+    {
+      document.addEventListener("click", e => this.handleDocumentClick(e));
+
+      // ✅ Accesibilidad con teclado (Enter / Space sobre la fila)
+      document.addEventListener("keydown", e => this.handleDocumentKeydown(e));
+    }
+    {
+      // ✅ Filtros (formulario)
+      if (this.form) {
+        this.form.addEventListener("submit", e => this.handleFormSubmit(e));
+        this.form.addEventListener("change", event => {
+          if (event.target.name === "category") this.drawGroupOptions();
+          if (["category", "group", "status"].includes(event.target.name)) this.applyFilters();
+        });
+        this.form.addEventListener("reset", () => {
+          // Espera a que se resetee el form para leer los nuevos valores
+          setTimeout(() => {
+            this.drawGroupOptions();
+            this.applyFilters();
+          }, 0);
+        });
+      }
+
+      // ✅ Orden (select)
+      if (this.sortSelect) {
+        this.sortSelect.addEventListener("change", () => this.applySort());
+      }
+    } // 🔹 Cargar datos desde el servidor
+    this.updateProductsSupplier();
+
+    // 🔹 Aplicar sort/filters por si hay filas demo
+    this.applySort();
+  }
+
+  // =========================
+  //   Helpers de tabla (UI)
+  // =========================
+
+  _getRows() {
+    return Array.from(document.querySelectorAll("tbody#products__table tr.row-link"));
+  }
+  // =========================
+  //   Filtros / Orden
+  // =========================
+
+  applyFilters() {
+    const rows = this._getRows();
+    if (!this.form) return;
+    const data = new FormData(this.form);
+    const q = (data.get("q") || "").toString().trim().toLowerCase();
+    const cat = (data.get("category") || "").toString();
+    const sts = (data.get("status") || "").toString();
+    const group = (data.get("group") || "").toString();
+    let visible = 0;
+    rows.forEach(tr => {
+      const name = (tr.dataset.name || "").toLowerCase();
+      const sku = (tr.dataset.sku || "").toLowerCase();
+      const c = tr.dataset.category || "";
+      const s = tr.dataset.status || "";
+      const passQ = !q || name.includes(q) || sku.includes(q);
+      const passC = !cat || c === cat;
+      const passS = !sts || s === sts;
+      const passG = !group || (tr.dataset.group || "") === group;
+      const show = passQ && passC && passS && passG;
+      tr.style.display = show ? "" : "none";
+      if (show) visible++;
+    });
+    if (this.count) {
+      this.count.textContent = `${visible} product${visible === 1 ? "" : "s"}`;
+    }
+  }
+
+  applySort() {
+    const rows = this._getRows();
+    const tbody = document.querySelector(".products__table tbody#products__table");
+    if (!tbody) return;
+    const val = this.sortSelect?.value || "name-asc";
+    const getName = tr => (tr.dataset.name || "").toString();
+    const getPrice = tr => parseFloat(tr.querySelector("td[data-price]")?.dataset.price || "0");
+    const sorted = [...rows].sort((a, b) => {
+      if (val === "price-asc") return getPrice(a) - getPrice(b);
+      if (val === "price-desc") return getPrice(b) - getPrice(a);
+      // default: ordenar por nombre ascendente
+      return getName(a).localeCompare(getName(b));
+    });
+    sorted.forEach(tr => tbody.appendChild(tr));
+
+    // Después de reordenar, volvemos a aplicar filtros
+    this.applyFilters();
+  }
+
+  // =========================
+  //   Fetch + pintado tabla
+  // =========================
+
+  async updateProductsSupplier() {
+    const url = "../../controller/products/product.php";
+    const payload = {
+      action: "get_all_products_supplier"
+    };
+    try {
+      const response = await this.makeRequest(url, payload);
+
+      //  alert(txt);
+
+      // ✅ res esperado: { success:true, data:[...] }
+      const data = response?.data || [];
+      this.supplierProducts = data;
+      this.drawProductsSupplier(data);
+      this.drawCategoriesOptiones(data);
+      this.drawGroupOptions(data);
+
+      // ✅ Re-aplica orden/filtros con las nuevas filas
+      this.applySort();
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }
+
+  // =========================
+  //   Categorías únicas <select>
+  // =========================
+
+  drawCategoriesOptiones(list) {
+    const uniqueCategories = [];
+    const list_categories = document.getElementById("list_categories");
+    if (!list_categories) return;
+
+    // Opción por defecto
+    list_categories.innerHTML = `<option value="">All</option>`;
+    for (let i = 0; i < list.length; i++) {
+      const category = list[i].category_name;
+
+      // Saltar nulos o vacíos
+      if (category === null || category === "") continue;
+
+      // Solo agregar si no existe aún
+      if (!uniqueCategories.includes(category)) {
+        uniqueCategories.push(category);
+
+        // value = category para que el filtro funcione (data-category === value)
+        list_categories.innerHTML += `<option value="${this._escAttr(category)}">${this._escHtml(category)}</option>`;
+      }
+    }
+  }
+
+  drawGroupOptions(list = this.supplierProducts) {
+    const select = document.getElementById("list_groups");
+    if (!select) return;
+    const category = document.getElementById("list_categories")?.value || "";
+    const previousGroup = select.value;
+    const matchingProducts = list.filter(product => !category || product.category_name === category);
+    const groups = [...new Set(matchingProducts.map(product => String(product.group_name || "").trim()).filter(Boolean))];
+    groups.sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '<option value="">All</option>' + groups.map(group =>
+      `<option value="${this._escAttr(group)}">${this._escHtml(group)}</option>`
+    ).join("");
+    select.value = groups.includes(previousGroup) ? previousGroup : "";
+  }
+
+  // =========================
+  //   Pintar filas de productos
+  // =========================
+
+  drawProductsSupplier(list) {
+    const tbody = document.getElementById("products__table");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (!Array.isArray(list) || list.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4">
+            <div style="padding:12px; color: var(--muted);">No products found.</div>
+          </td>
+        </tr>
+      `;
+      this.applyFilters();
+      return;
+    }
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i] || {};
+      const sku = (p.sku || "").toString();
+      const skuVariation = (p.first_variation_sku || "").toString();
+      const name = (p.product_name || "Untitled product").toString();
+      const category = (p.category_name || "—").toString();
+      const group = String(p.group_name || "").trim();
+      const statusRaw = (p.status || "draft").toString().toLowerCase();
+      const statusMap = {
+        active: {
+          text: "Active",
+          cls: "badge-success"
+        },
+        draft: {
+          text: "Draft",
+          cls: "badge-warning"
+        },
+        inactive: {
+          text: "Inactive",
+          cls: "badge-info"
+        },
+        archived: {
+          text: "Archived",
+          cls: "badge-info"
+        }
+      };
+      const st = statusMap[statusRaw] || {
+        text: statusRaw || "Draft",
+        cls: "badge-warning"
+      };
+      const href = `../../view/category/index.php?sku=${encodeURIComponent(sku)}&sku_variation=${encodeURIComponent(skuVariation)}&mode=edit`;
+      tbody.innerHTML += `
+        <tr class="row-link"
+            data-name="${this._escAttr(name.toLowerCase())}"
+            data-sku="${this._escAttr(sku.toLowerCase())}"
+            data-category="${this._escAttr(category)}"
+            data-group="${this._escAttr(group)}"
+            data-status="${this._escAttr(st.text)}"
+            data-href="${this._escAttr(href)}"
+            tabindex="0">
+          <td>
+            <a class="prod-name" href="${this._escAttr(href)}">${this._escHtml(name)}</a>
+          </td>
+          <td><span class="chip">${this._escHtml(category)}</span></td>
+          <td>${this._escHtml(group || "—")}</td>
+          <td class="center">
+            <span class="badge ${st.cls}">
+              <i></i>${this._escHtml(st.text)}
+            </span>
+          </td>
+        </tr>
+      `;
+    }
+    this.applySort();
+  }
+  // =========================
+  //   Helpers de escape
+  // =========================
+
+  _escHtml(str) {
+    return String(str ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+
+  _escAttr(str) {
+    return this._escHtml(str).replaceAll("`", "&#096;");
+  }
+
+  handleDocumentClick(e) {
+    const tr = e.target.closest("tr.row-link");
+    if (!tr) return;
+    // Si el click fue en un <a> o <button> interno, no redirigimos desde la fila
+    if (e.target.closest("a, button")) return;
+    const href = tr.getAttribute("data-href");
+    if (href) window.location.href = href;
+  }
+
+  handleDocumentKeydown(e) {
+    if (e.target.closest("a, button, input, select")) return;
+    const tr = e.target.closest("tr.row-link");
+    if (!tr) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    const href = tr.getAttribute("data-href");
+    if (href) window.location.href = href;
+  }
+
+  handleFormSubmit(e) {
+    e.preventDefault();
+    this.applyFilters();
+  }
+
+  async makeRequest(url, data, options = {}) {
+    const {
+      requireSuccess = false,
+      responseType = "json",
+      ...requestOptions
+    } = options;
+    const isFormData = data instanceof FormData;
+    const headers = new Headers(requestOptions.headers || {});
+    if (!isFormData && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      ...requestOptions,
+      headers,
+      body: isFormData ? data : JSON.stringify(data)
+    });
+    const text = await response.text();
+    let result;
+    try {
+      result = responseType === "text" ? text : JSON.parse(text);
+    } catch {
+      const error = new Error("The server returned an invalid response.");
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.ok || requireSuccess && !result?.success) {
+      const error = new Error(result?.error || result?.message || "The request could not be completed.");
+      error.status = response.status;
+      error.code = result?.code || null;
+      error.details = result;
+      throw error;
+    }
+    return result;
+  }
+}
+
+// 🔹 Instancia global (puedes cambiar el nombre si quieres)
+const productsSupplierClass = new ProductsSupplierClass();

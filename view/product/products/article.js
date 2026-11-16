@@ -1,0 +1,891 @@
+class ProductsClass {
+  constructor() {
+    this.articles = document.getElementById("articles");
+    this.variationFilters = document.getElementById("variation-filters");
+    this.filtersPanel = document.querySelector(".filter_products");
+    this.filterScrollId = 0;
+    this.filterScrollFrame = null;
+    this.expandedCategories = new Set();
+    this.catalogCategories = [];
+    this.filterResizeObserver = new ResizeObserver(() => this.queueFilterScrollUpdate());
+    this.productsData = [];
+    this.variationRows = [];
+    this.statusThreeProductsData = [];
+    this.searchText = "";
+    this.searchRequestController = null;
+    this.imageRotationTimer = null;
+    this.imageRotationInterval = 5000;
+    this.prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
+    this.variationFilters?.addEventListener("change", () => this.applyFilters());
+    this.filtersPanel?.addEventListener("scroll", () => this.queueFilterScrollUpdate(), { capture: true, passive: true });
+    this.filtersPanel?.addEventListener("click", event => this.handleFilterScrollClick(event));
+    window.addEventListener("resize", () => this.queueFilterScrollUpdate());
+    this.syncFilterScrollControls();
+    this.getCatalog();
+    document.addEventListener("input", event => this.handleProductSearch(event));
+    document.addEventListener("keydown", event => this.handleProductSearchKey(event));
+    document.addEventListener("click", event => this.handleProductClick(event));
+    this.articles?.addEventListener("error", event => this.handleProductImageError(event), true);
+  }
+
+  syncFilterScrollControls() {
+    if (!this.filtersPanel) return;
+    this.filterResizeObserver.disconnect();
+    this.filtersPanel.querySelectorAll(".filters-content, .scroll_filter").forEach(scroll => {
+      if (!scroll.hasAttribute("data-filter-scroll")) {
+        const shell = document.createElement("div");
+        shell.className = "filter-scroll";
+        const label = scroll.closest(".filter-group")?.querySelector("h1")?.textContent || "Filters";
+        scroll.id ||= `filter-scroll-${++this.filterScrollId}`;
+        scroll.dataset.filterScroll = "";
+        scroll.tabIndex = 0;
+        scroll.setAttribute("aria-label", label);
+        scroll.before(shell);
+        shell.append(scroll);
+        ["up", "down"].forEach(direction => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "filter-scroll-button";
+          button.dataset.filterScrollDirection = direction;
+          button.setAttribute("aria-label", `Scroll ${label.toLowerCase()} ${direction}`);
+          button.setAttribute("aria-controls", scroll.id);
+          button.hidden = true;
+          if (direction === "up") shell.prepend(button);
+          else shell.append(button);
+        });
+      }
+      this.filterResizeObserver.observe(scroll);
+      if (scroll.firstElementChild) this.filterResizeObserver.observe(scroll.firstElementChild);
+    });
+    this.queueFilterScrollUpdate();
+  }
+
+  queueFilterScrollUpdate() {
+    if (this.filterScrollFrame !== null) return;
+    this.filterScrollFrame = requestAnimationFrame(() => {
+      this.filterScrollFrame = null;
+      // Measure nested lists first, since their controls affect the panel height.
+      Array.from(this.filtersPanel?.querySelectorAll(".filter-scroll") || []).reverse().forEach(shell => {
+        const scroll = shell.querySelector(":scope > [data-filter-scroll]");
+        const up = shell.querySelector(':scope > [data-filter-scroll-direction="up"]');
+        const down = shell.querySelector(':scope > [data-filter-scroll-direction="down"]');
+        const hasOverflow = scroll.scrollHeight - scroll.clientHeight > 1;
+        shell.classList.toggle("is-scrollable", hasOverflow);
+        up.hidden = !hasOverflow || scroll.scrollTop <= 1;
+        down.hidden = !hasOverflow || scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 1;
+        if ((up.hidden && document.activeElement === up) || (down.hidden && document.activeElement === down)) {
+          scroll.focus({ preventScroll: true });
+        }
+      });
+    });
+  }
+
+  handleFilterScrollClick(event) {
+    const button = event.target.closest("[data-filter-scroll-direction]");
+    if (!button || !this.filtersPanel?.contains(button)) return;
+    const scroll = document.getElementById(button.getAttribute("aria-controls"));
+    const direction = button.dataset.filterScrollDirection === "up" ? -1 : 1;
+    scroll.scrollBy({
+      top: direction * Math.max(80, scroll.clientHeight * 0.75),
+      behavior: this.prefersReducedMotion ? "instant" : "smooth"
+    });
+  }
+
+  async getCategoryFilters() {
+    const result = await this.makeRequest("../../controller/filters/category_filters.php", {
+      action: "get_categories_filter_and_their_groups",
+      groups: []
+    }, {
+      signal: null
+    });
+    return result.success && Array.isArray(result.cateogories) ? result.cateogories : [];
+  }
+
+  drawCategoryFilters(categories, products) {
+    const available = new Set(products.map(product => String(product.category_name || "")));
+    this.catalogCategories = categories.filter(category => Number(category.approved) === 1 && available.has(String(category.name || "")));
+    this.expandedCategories = new Set(
+      this.catalogCategories.length === 1 ? [String(this.catalogCategories[0].name)] : []
+    );
+  }
+
+  async fetchGetProducts() {
+    const result = await this.makeRequest("../../controller/products/product.php", {
+      action: "get_products"
+    }, {
+      signal: null
+    });
+    const productSets = await this.prepareProductSets(result.result);
+    if (!this.searchText.trim()) {
+      this.productsData = [...productSets.normalProducts, ...productSets.statusThreeProducts];
+      this.variationRows = productSets.variationRows;
+      this.statusThreeProductsData = productSets.statusThreeProducts;
+    }
+    return productSets.normalProducts;
+  }
+
+  getPublishedProducts(products) {
+    return (Array.isArray(products) ? products : []).filter(product => Number(product.is_approved) === 1 && product.category_name !== "Unassigned Category" && product.group_name !== "Unassigned Group");
+  }
+
+  async prepareProductSets(products, signal = null) {
+    const publishedProducts = this.getPublishedProducts(products);
+    const normalProducts = publishedProducts.filter(product => [1, 2].includes(Number(product.status)));
+    const statusThreeSourceProducts = publishedProducts.filter(product => Number(product.status) === 3);
+    const [variationRows, statusThreeProducts] = await Promise.all([this.fetchTypeVariations(normalProducts.map(product => product.product_id), signal), this.prepareStatusThreeProducts(statusThreeSourceProducts, signal)]);
+    return {
+      normalProducts,
+      variationRows,
+      statusThreeProducts
+    };
+  }
+
+  async fetchSearchProducts(searchText) {
+    this.searchRequestController?.abort();
+    const requestController = new AbortController();
+    this.searchRequestController = requestController;
+    try {
+      const result = await this.makeRequest("../../controller/products/product.php", {
+        action: "search_products",
+        search: String(searchText || "").trim()
+      }, {
+        signal: requestController.signal
+      });
+      if (this.searchRequestController !== requestController) return;
+      const productSets = await this.prepareProductSets(result.result, requestController.signal);
+      if (this.searchRequestController !== requestController) return;
+      this.productsData = [...productSets.normalProducts, ...productSets.statusThreeProducts];
+      this.variationRows = productSets.variationRows;
+      this.statusThreeProductsData = productSets.statusThreeProducts;
+      this.applyFilters();
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error("Error searching products:", error);
+      }
+    } finally {
+      if (this.searchRequestController === requestController) {
+        this.searchRequestController = null;
+      }
+    }
+  }
+
+  async fetchTypeVariations(productIds, signal = null) {
+    if (!Array.isArray(productIds) || productIds.length === 0) return [];
+    const result = await this.makeRequest("../../controller/filters/category_filters.php", {
+      action: "get_type_variations_by_products",
+      product_ids: productIds
+    }, {
+      signal: signal
+    });
+    return Array.isArray(result.typeVariations) ? result.typeVariations : [];
+  }
+
+  async prepareStatusThreeProducts(products, signal = null) {
+    if (!Array.isArray(products) || products.length === 0) return [];
+    const result = await this.makeRequest("../../controller/products/product.php", {
+      action: "get_status_three_variations",
+      product_ids: products.map(product => product.product_id)
+    }, {
+      signal: signal
+    });
+    if (!result?.success) {
+      throw new Error(result?.error || "Unable to load status 3 variations.");
+    }
+    const variationsByProduct = new Map();
+    (Array.isArray(result.result) ? result.result : []).forEach(variation => {
+      const productId = String(variation.product_id ?? "");
+      if (!variationsByProduct.has(productId)) variationsByProduct.set(productId, []);
+      variationsByProduct.get(productId).push(variation);
+    });
+    const preparedProducts = [];
+    products.forEach(product => {
+      const eligibleVariations = variationsByProduct.get(String(product.product_id)) || [];
+      const variationGroups = this.groupEligibleVariations(eligibleVariations);
+      const matrix = this.createCartesianMatrix(variationGroups);
+      const finalObjects = this.createStatusThreeObjects(product, matrix);
+      const completeCombinations = matrix.map((combination, index) => ({
+        combination: index + 1,
+        title: combination.map(option => option.name).join(" — "),
+        selected_values: Object.fromEntries(combination.map(option => [option.type_name, option.name]))
+      }));
+      console.groupCollapsed(`[Products][status=3] ${product.name || product.SKU || product.product_id}`);
+      console.log("Producto original con status = 3:", product);
+      console.log("Número total de combinaciones:", matrix.length);
+      console.log("Combinaciones completas:", completeCombinations);
+      console.log("Matriz completa:", matrix);
+      console.log("Objetos finales compatibles con Products (status = 2):", finalObjects);
+      console.groupEnd();
+      preparedProducts.push(...finalObjects);
+    });
+    return preparedProducts;
+  }
+
+  groupEligibleVariations(variations) {
+    const groups = new Map();
+    (Array.isArray(variations) ? variations : []).forEach(variation => {
+      const typeId = String(variation.type_id ?? "").trim();
+      const typeName = String(variation.type_name ?? "").trim();
+      const optionName = String(variation.name ?? "").trim();
+      const priceMode = String(variation.price_display_mode || "prices").trim().toLowerCase();
+      if (!typeId || !typeName || !optionName || priceMode !== "prices") return;
+      if (!groups.has(typeId)) {
+        groups.set(typeId, {
+          type_id: variation.type_id,
+          type_name: typeName,
+          options: new Map()
+        });
+      }
+      const group = groups.get(typeId);
+      const optionKey = optionName.toLocaleLowerCase().replace(/\s+/g, " ");
+      const current = group.options.get(optionKey);
+      if (current) {
+        current.source_variation_ids = Array.from(new Set([...current.source_variation_ids, variation.variation_id]));
+        current.source_variations = this.mergeUniqueRows(current.source_variations, [{
+          variation_id: variation.variation_id,
+          parent_id: variation.parent_id
+        }], "variation_id");
+        current.source_variation_skus = Array.from(new Set([...current.source_variation_skus, variation.SKU].filter(Boolean)));
+        current.images = this.mergeUniqueRows(current.images, variation.images, "image_id", "link");
+        current.prices = this.mergeUniqueRows(current.prices, variation.prices, "price_id");
+        return;
+      }
+      group.options.set(optionKey, {
+        ...variation,
+        name: optionName,
+        type_name: typeName,
+        price_display_mode: priceMode,
+        images: Array.isArray(variation.images) ? [...variation.images] : [],
+        prices: Array.isArray(variation.prices) ? [...variation.prices] : [],
+        source_variation_ids: [variation.variation_id],
+        source_variations: [{
+          variation_id: variation.variation_id,
+          parent_id: variation.parent_id
+        }],
+        source_variation_skus: variation.SKU ? [variation.SKU] : []
+      });
+    });
+    return Array.from(groups.values()).map(group => ({
+      type_id: group.type_id,
+      type_name: group.type_name,
+      options: Array.from(group.options.values())
+    }));
+  }
+
+  mergeUniqueRows(currentRows, newRows, ...keyFields) {
+    const merged = Array.isArray(currentRows) ? [...currentRows] : [];
+    const keys = new Set(merged.map(row => this.getRowKey(row, keyFields)));
+    (Array.isArray(newRows) ? newRows : []).forEach(row => {
+      const key = this.getRowKey(row, keyFields);
+      if (keys.has(key)) return;
+      keys.add(key);
+      merged.push(row);
+    });
+    return merged;
+  }
+
+  getRowKey(row, keyFields) {
+    const matchingField = keyFields.find(field => row?.[field] !== null && row?.[field] !== undefined && row?.[field] !== "");
+    return matchingField ? `${matchingField}:${row[matchingField]}` : JSON.stringify(row);
+  }
+
+  createCartesianMatrix(groups) {
+    if (!Array.isArray(groups) || groups.length === 0) return [];
+    const matrix = groups.reduce((combinations, group) => {
+      if (!Array.isArray(group.options) || group.options.length === 0) return [];
+      return combinations.flatMap(combination => group.options.map(option => [...combination, {
+        ...option,
+        type_id: group.type_id,
+        type_name: group.type_name
+      }]));
+    }, [[]]);
+    const uniqueCombinations = new Map();
+    matrix.forEach(combination => {
+      const key = combination.map(option => `${option.type_id}:${String(option.name).trim().toLocaleLowerCase()}`).join("|");
+      if (!uniqueCombinations.has(key)) uniqueCombinations.set(key, combination);
+    });
+    return Array.from(uniqueCombinations.values());
+  }
+
+  resolveSelectedVariationSources(combination) {
+    const resolvedVariationIds = new Set();
+    return (Array.isArray(combination) ? combination : []).map(variation => {
+      const sources = Array.isArray(variation.source_variations) && variation.source_variations.length ? variation.source_variations : [{
+        variation_id: variation.variation_id,
+        parent_id: variation.parent_id
+      }];
+      const linkedSource = sources.find(source => resolvedVariationIds.has(String(source.parent_id)));
+      const selectedSource = linkedSource || sources[0];
+      const variationId = selectedSource?.variation_id ?? variation.variation_id;
+      resolvedVariationIds.add(String(variationId));
+      return {
+        ...variation,
+        variation_id: variationId,
+        parent_id: selectedSource?.parent_id ?? variation.parent_id
+      };
+    });
+  }
+
+  createStatusThreeObjects(product, matrix) {
+    return (Array.isArray(matrix) ? matrix : []).map(combination => {
+      const selectedVariations = this.resolveSelectedVariationSources(combination).map(variation => ({
+        variation_id: variation.variation_id,
+        source_variation_ids: variation.source_variation_ids,
+        type_id: variation.type_id,
+        type_name: variation.type_name,
+        name: variation.name,
+        SKU: variation.SKU,
+        source_variation_skus: variation.source_variation_skus,
+        price_display_mode: variation.price_display_mode,
+        image: variation.image,
+        images: variation.images,
+        prices: variation.prices
+      }));
+      const selectedVariationIds = new Set(selectedVariations.map(variation => String(variation.variation_id)));
+      const selectedItems = this.mergeUniqueRows([], (Array.isArray(product.items) ? product.items : []).filter(item => selectedVariationIds.has(String(item.variation_id))), "item_id");
+      const variationIds = selectedVariations.map(variation => variation.variation_id);
+      const combinationId = `${product.product_id}:${variationIds.join("-")}`;
+      const titleParts = selectedVariations.map(variation => variation.name).map(value => String(value || "").trim()).filter(Boolean);
+      const selectedImages = Array.from(new Set(selectedVariations.flatMap(variation => (Array.isArray(variation.images) ? variation.images.map(image => image.link) : [])).map(value => String(value || "").trim()).filter(Boolean)));
+      const productImages = (Array.isArray(product.images) ? product.images : []).map(value => String(value || "").trim()).filter(Boolean);
+      const images = selectedImages.length ? selectedImages : Array.from(new Set(productImages));
+      const prices = this.mergeUniqueRows([], selectedVariations.flatMap(variation => (Array.isArray(variation.prices) ? variation.prices : []).map(price => ({
+        ...price,
+        variation_id: variation.variation_id,
+        variation_name: variation.name,
+        type_id: variation.type_id,
+        type_name: variation.type_name,
+        price_display_mode: variation.price_display_mode
+      }))), "price_id");
+      const numericPrices = prices.map(price => Number(price.price)).filter(price => Number.isFinite(price));
+      const minimumPrice = numericPrices.length ? Math.min(...numericPrices) : null;
+      return {
+        ...product,
+        product_id: product.product_id,
+        base_product_id: product.product_id,
+        base_product_sku: product.SKU,
+        base_product_name: product.name,
+        combination_id: combinationId,
+        SKU: `${product.SKU || `PRODUCT-${product.product_id}`}--${variationIds.map(id => `V${id}`).join("-")}`,
+        name: titleParts.join(" — "),
+        category_name: product.category_name,
+        group_name: product.group_name,
+        images,
+        items: selectedItems,
+        price: minimumPrice,
+        price_info: {
+          kind: prices.length ? "variable" : "no_additional_price",
+          minimum_price: minimumPrice,
+          ranges: prices
+        },
+        prices,
+        variation_ids: variationIds,
+        variation_values: Object.fromEntries(selectedVariations.map(variation => [variation.type_name, variation.name])),
+        selected_variations: selectedVariations,
+        is_status_three_combination: true
+      };
+    });
+  }
+
+  getSelectedValues(container, selector) {
+    return new Set(Array.from(container?.querySelectorAll(`${selector}:checked`) || []).map(input => input.value));
+  }
+
+  applyFilters() {
+    const selections = new Map();
+    this.variationFilters?.querySelectorAll("input[data-type-id]:checked").forEach(input => {
+      const category = input.dataset.category;
+      if (!selections.has(category)) selections.set(category, new Map());
+      const types = selections.get(category);
+      if (!types.has(input.dataset.typeId)) types.set(input.dataset.typeId, new Set());
+      types.get(input.dataset.typeId).add(input.value);
+    });
+    const filtered = this.productsData.filter(product => {
+      if (!selections.size) return true;
+      const types = selections.get(String(product.category_name || ""));
+      if (!types) return false;
+      return Array.from(types).every(([typeId, options]) => {
+        if (product.is_status_three_combination) {
+          return (product.selected_variations || []).some(variation => String(variation.type_id) === typeId && options.has(String(variation.name)));
+        }
+        return this.variationRows.some(row => String(row.product_id) === String(product.product_id) && String(row.type_id) === typeId && options.has(String(row.option_name)));
+      });
+    });
+    this.drawProducts(filtered);
+    this.drawTypeVariations(this.productsData, selections);
+  }
+
+  drawTypeVariations(visibleProducts, previousSelections = new Map()) {
+    if (!this.variationFilters) return;
+    this.variationFilters.innerHTML = "";
+    this.catalogCategories.forEach(category => {
+      const categoryName = String(category.name);
+      const products = (visibleProducts || []).filter(product => String(product.category_name) === categoryName);
+      if (!products.length) return;
+      const normalIds = new Set(products.filter(product => !product.is_status_three_combination).map(product => String(product.product_id)));
+      const grouped = new Map();
+      const addOption = (typeId, typeName, optionName, productKey) => {
+        typeId = String(typeId ?? "");
+        optionName = String(optionName ?? "").trim();
+        if (!typeId || !optionName) return;
+        if (!grouped.has(typeId)) grouped.set(typeId, {name: typeName, options: new Map()});
+        const options = grouped.get(typeId).options;
+        if (!options.has(optionName)) options.set(optionName, new Set());
+        options.get(optionName).add(productKey);
+      };
+      this.variationRows.forEach(row => {
+        if (normalIds.has(String(row.product_id))) addOption(row.type_id, row.type_name, row.option_name, `product:${row.product_id}`);
+      });
+      products.filter(product => product.is_status_three_combination).forEach(product => {
+        (product.selected_variations || []).forEach(variation => addOption(variation.type_id, variation.type_name, variation.name, `combination:${product.combination_id}`));
+      });
+      const section = document.createElement("section");
+      section.className = "filter-group filter-category";
+      const title = document.createElement("h1");
+      title.textContent = categoryName;
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "category-options-toggle";
+      const panel = document.createElement("div");
+      panel.className = "category-options-panel";
+      panel.id = `category-options-${++this.filterScrollId}`;
+      toggle.setAttribute("aria-controls", panel.id);
+      const update = () => {
+        const expanded = this.expandedCategories.has(categoryName);
+        panel.hidden = !expanded;
+        toggle.setAttribute("aria-expanded", String(expanded));
+        toggle.textContent = expanded ? "Hide filter options" : "View filter options";
+        toggle.setAttribute("aria-label", `${toggle.textContent}: ${categoryName}`);
+      };
+      toggle.addEventListener("click", () => {
+        if (this.expandedCategories.has(categoryName)) this.expandedCategories.delete(categoryName);
+        else this.expandedCategories.add(categoryName);
+        update();
+        this.queueFilterScrollUpdate();
+      });
+      update();
+      grouped.forEach((type, typeId) => {
+        const group = document.createElement("div");
+        group.className = "filter-group";
+        const heading = document.createElement("h1");
+        heading.textContent = type.name;
+        const scroll = document.createElement("div");
+        scroll.className = "scroll_filter";
+        const list = document.createElement("ul");
+        list.className = "checklist";
+        type.options.forEach((productSet, optionName) => {
+          const item = document.createElement("li");
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          const text = document.createElement("span");
+          input.type = "checkbox";
+          input.dataset.typeId = typeId;
+          input.dataset.category = categoryName;
+          input.value = optionName;
+          input.checked = previousSelections.get(categoryName)?.get(typeId)?.has(optionName) || false;
+          text.className = "filter-option-name";
+          text.textContent = optionName;
+          const count = document.createElement("span");
+          count.className = "filter-option-count";
+          count.textContent = String(productSet.size);
+          count.setAttribute("aria-label", `${productSet.size} products`);
+          label.append(input, text, count);
+          item.append(label);
+          list.append(item);
+        });
+        scroll.append(list);
+        group.append(heading, scroll);
+        panel.append(group);
+      });
+      section.append(title, toggle, panel);
+      this.variationFilters.append(section);
+    });
+    this.syncFilterScrollControls();
+  }
+
+  getProductSpecifications(product) {
+    const groupedSpecifications = new Map();
+    const addSpecification = (itemName, itemDescription) => {
+      const label = String(itemName || "").trim();
+      const value = String(itemDescription || "").trim();
+      if (!label || !value) return;
+      const key = label.toLocaleLowerCase().replace(/\s+/g, " ");
+      if (!groupedSpecifications.has(key)) {
+        groupedSpecifications.set(key, {
+          label,
+          values: [],
+          normalizedValues: new Set()
+        });
+      }
+      const specification = groupedSpecifications.get(key);
+      const normalizedValue = value.toLocaleLowerCase().replace(/\s+/g, " ");
+      if (specification.normalizedValues.has(normalizedValue)) return;
+      specification.normalizedValues.add(normalizedValue);
+      specification.values.push(value);
+    };
+    (Array.isArray(product?.items) ? product.items : []).forEach(item => {
+      addSpecification(item.name, item.description);
+    });
+    return Array.from(groupedSpecifications.values()).map(({
+      label,
+      values
+    }) => ({
+      label,
+      values
+    }));
+  }
+
+  createProductSpecificationsCard(product, productName) {
+    const card = document.createElement("div");
+    card.className = "product-spec-card";
+    const header = document.createElement("div");
+    header.className = "product-spec-header";
+    const icon = document.createElement("span");
+    icon.className = "product-spec-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "✦";
+    const headingGroup = document.createElement("div");
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "product-spec-eyebrow";
+    eyebrow.textContent = "Product details";
+    const heading = document.createElement("h3");
+    heading.className = "product-spec-heading";
+    heading.textContent = productName;
+    headingGroup.append(eyebrow, heading);
+    header.append(icon, headingGroup);
+    card.append(header);
+    const specifications = this.getProductSpecifications(product);
+    if (!specifications.length) {
+      const empty = document.createElement("p");
+      empty.className = "product-spec-empty";
+      empty.textContent = "No specifications are available for this product.";
+      card.append(empty);
+      return card;
+    }
+    const list = document.createElement("dl");
+    list.className = "product-spec-list";
+    specifications.forEach(specification => {
+      const row = document.createElement("div");
+      row.className = "product-spec-row";
+      const term = document.createElement("dt");
+      term.textContent = `${specification.label}:`;
+      const description = document.createElement("dd");
+      specification.values.forEach(value => {
+        const chip = document.createElement("span");
+        chip.className = "product-spec-value";
+        chip.textContent = value;
+        description.append(chip);
+      });
+      row.append(term, description);
+      list.append(row);
+    });
+    card.append(list);
+    return card;
+  }
+
+  drawProducts(products) {
+    if (!this.articles) return;
+    const shouldRestoreSearchFocus = document.activeElement?.id === "product-search";
+    this.stopImageRotation();
+    this.articles.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.className = "products-search-panel";
+    const label = document.createElement("label");
+    label.htmlFor = "product-search";
+    label.textContent = "Search products";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.id = "product-search";
+    search.placeholder = "Search by product, category or group...";
+    search.autocomplete = "off";
+    search.value = this.searchText;
+    const searchButton = document.createElement("button");
+    searchButton.id = "product-search-button";
+    searchButton.type = "button";
+    searchButton.textContent = "Search";
+    const controls = document.createElement("div");
+    controls.className = "products-search-controls";
+    controls.append(search, searchButton);
+    panel.append(label, controls);
+    const title = document.createElement("h1");
+    title.textContent = "All Products";
+    this.articles.append(panel, title);
+    if (shouldRestoreSearchFocus) {
+      requestAnimationFrame(() => {
+        search.focus();
+        search.setSelectionRange(search.value.length, search.value.length);
+      });
+    }
+    if (!products.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "No products found.";
+      this.articles.append(empty);
+      return;
+    }
+    products.forEach(product => {
+      const box = document.createElement("div");
+      box.className = "box_article";
+      const productName = product.base_product_name || product.name || "Unnamed product";
+      const media = this.createProductMedia(product, productName);
+      const content = document.createElement("div");
+      content.className = "product-card-content";
+      const meta = document.createElement("div");
+      meta.className = "product-card-meta";
+      const category = document.createElement("span");
+      category.className = "product-card-badge product-card-badge_category";
+      category.textContent = product.category_name || "No category";
+      const productGroup = document.createElement("span");
+      productGroup.className = "product-card-badge";
+      productGroup.textContent = product.group_name || "No group";
+      meta.append(category, productGroup);
+      const name = document.createElement("h2");
+      name.className = "product-card-title";
+      name.textContent = productName;
+      const actions = document.createElement("div");
+      actions.className = "product-card-actions";
+      const seeMoreButton = document.createElement("button");
+      seeMoreButton.className = "buttom_products buttom_products_secondary";
+      seeMoreButton.type = "button";
+      seeMoreButton.textContent = "See more";
+      seeMoreButton.dataset.productAction = "preview";
+      seeMoreButton.product = product;
+      const buyButton = document.createElement("button");
+      buyButton.className = "buttom_products";
+      buyButton.type = "button";
+      buyButton.textContent = "Buy";
+      buyButton.dataset.productAction = "buy";
+      buyButton.product = product;
+      actions.append(seeMoreButton, buyButton);
+      content.append(meta, name);
+      if (product.is_status_three_combination) {
+        const selectionLabel = document.createElement("p");
+        selectionLabel.className = "product-selection-label";
+        selectionLabel.textContent = "Selected configuration";
+        const details = document.createElement("dl");
+        details.className = "product-combination-details";
+        (Array.isArray(product.selected_variations) ? product.selected_variations : []).forEach(variation => {
+          const row = document.createElement("div");
+          row.className = "product-combination-row";
+          const type = document.createElement("dt");
+          const typeName = document.createElement("strong");
+          typeName.textContent = `${variation.type_name || "Option"}:`;
+          type.append(typeName);
+          const option = document.createElement("dd");
+          option.textContent = variation.name || "—";
+          row.append(type, option);
+          details.append(row);
+        });
+        content.append(selectionLabel, details);
+      }
+      const specificationsCard = this.createProductSpecificationsCard(product, productName);
+      box.append(media, content, actions, specificationsCard);
+      this.articles.append(box);
+    });
+    this.startImageRotation();
+  }
+
+  createProductMedia(product, productName) {
+    const images = this.getProductImages(product);
+    const media = document.createElement("figure");
+    media.className = "product-card-media";
+    media.dataset.currentImage = "0";
+    media.productImages = images;
+    media.productName = productName;
+    media.setAttribute("aria-label", `${productName} images`);
+    if (!images.length) {
+      const empty = document.createElement("span");
+      empty.className = "product-media-empty";
+      empty.textContent = "No image selected";
+      media.append(empty);
+      return media;
+    }
+    const image = document.createElement("img");
+    image.className = "product-card-image";
+    image.src = images[0];
+    image.alt = images.length > 1 ? `${productName} — image 1 of ${images.length}` : productName;
+    image.loading = "lazy";
+    image.decoding = "async";
+    media.append(image);
+    if (images.length > 1) {
+      const count = document.createElement("span");
+      count.className = "product-media-count";
+      count.textContent = `1 / ${images.length}`;
+      const previous = document.createElement("button");
+      previous.className = "product-media-control product-media-control_previous";
+      previous.type = "button";
+      previous.setAttribute("aria-label", `Previous image of ${productName}`);
+      previous.innerHTML = "&#8249;";
+      const next = document.createElement("button");
+      next.className = "product-media-control product-media-control_next";
+      next.type = "button";
+      next.setAttribute("aria-label", `Next image of ${productName}`);
+      next.innerHTML = "&#8250;";
+      media.append(count, previous, next);
+    }
+    return media;
+  }
+
+  getProductImages(product) {
+    const uniqueImages = new Set();
+    (Array.isArray(product?.images) ? product.images : []).forEach(source => {
+      const rawSource = typeof source === "object" ? source?.link : source;
+      const resolvedSource = this.resolveProductImage(rawSource);
+      if (resolvedSource) uniqueImages.add(resolvedSource);
+    });
+    return Array.from(uniqueImages);
+  }
+
+  resolveProductImage(source) {
+    const value = String(source || "").trim();
+    if (!value) return "";
+    if (/^(?:https?:|data:|blob:|\/)/i.test(value) || value.startsWith("../")) return value;
+    return `../../${value.replace(/^\.\//, "")}`;
+  }
+
+  rotateProductImage(media, direction = 1) {
+    const images = Array.isArray(media?.productImages) ? media.productImages : [];
+    if (images.length < 2) return;
+    const currentIndex = Number(media.dataset.currentImage || 0);
+    const nextIndex = (currentIndex + direction + images.length) % images.length;
+    const image = media.querySelector(".product-card-image");
+    const count = media.querySelector(".product-media-count");
+    if (!image) return;
+    media.dataset.currentImage = String(nextIndex);
+    image.dataset.fallbackApplied = "false";
+    image.src = images[nextIndex];
+    image.alt = `${media.productName} — image ${nextIndex + 1} of ${images.length}`;
+    if (count) count.textContent = `${nextIndex + 1} / ${images.length}`;
+    if (!this.prefersReducedMotion && typeof image.animate === "function") {
+      image.animate([{
+        opacity: .25,
+        transform: "scale(.985)"
+      }, {
+        opacity: 1,
+        transform: "scale(1)"
+      }], {
+        duration: 420,
+        easing: "ease-out"
+      });
+    }
+  }
+
+  startImageRotation() {
+    this.stopImageRotation();
+    const hasCarousels = this.articles?.querySelector(".product-card-media .product-media-count");
+    if (!hasCarousels || this.prefersReducedMotion) return;
+    this.imageRotationTimer = window.setInterval(() => {
+      this.articles?.querySelectorAll(".product-card-media").forEach(media => {
+        if (media.matches(":hover") || media.matches(":focus-within")) return;
+        this.rotateProductImage(media, 1);
+      });
+    }, this.imageRotationInterval);
+  }
+
+  stopImageRotation() {
+    if (!this.imageRotationTimer) return;
+    window.clearInterval(this.imageRotationTimer);
+    this.imageRotationTimer = null;
+  }
+
+  seeMoreProduct(product) {
+    window.location.href = this.buildProductPreviewUrl(product);
+  }
+
+  buildProductPreviewUrl(product) {
+    const params = new URLSearchParams();
+    const sku = String(product?.base_product_sku || product?.SKU || "").trim();
+    params.set("sku", sku);
+    if (product?.is_status_three_combination) {
+      if (product.combination_id) params.set("combination_id", product.combination_id);
+      const variationIds = (Array.isArray(product.selected_variations) ? product.selected_variations : []).map(variation => Number(variation.variation_id)).filter(id => Number.isInteger(id) && id > 0);
+      if (variationIds.length) params.set("variation_ids", variationIds.join(","));
+      (Array.isArray(product.selected_variations) ? product.selected_variations : []).forEach(variation => {
+        const typeName = String(variation.type_name || "").trim();
+        const optionName = String(variation.name || "").trim();
+        if (typeName && optionName) params.set(typeName, optionName);
+      });
+    }
+    return `../../view/preview_product_customers/index.php?${params.toString()}`;
+  }
+
+  buyProduct(sku) {
+    window.location.href = `../../view/preview_product_customers/index.php?sku=${encodeURIComponent(sku)}`;
+  }
+
+  handleProductSearch(event) {
+    if (event.target.id !== "product-search") return;
+    this.searchText = event.target.value;
+    this.fetchSearchProducts(this.searchText);
+  }
+
+  handleProductSearchKey(event) {
+    if (event.target.id !== "product-search" || event.key !== "Enter") return;
+    event.preventDefault();
+    this.handleProductSearch(event);
+  }
+
+  handleProductClick(event) {
+    const searchButton = event.target.closest("#product-search-button");
+    if (searchButton) {
+      this.searchText = document.getElementById("product-search")?.value || "";
+      this.fetchSearchProducts(this.searchText);
+      return;
+    }
+    const button = event.target.closest("button");
+    if (!button || !this.articles?.contains(button)) return;
+    if (button.dataset.productAction === "preview") this.seeMoreProduct(button.product);else if (button.dataset.productAction === "buy") this.buyProduct(button.product.base_product_sku || button.product.SKU);else if (button.classList.contains("product-media-control_previous")) this.rotateProductImage(button.closest(".product-card-media"), -1);else if (button.classList.contains("product-media-control_next")) this.rotateProductImage(button.closest(".product-card-media"), 1);
+  }
+
+  handleProductImageError(event) {
+    const image = event.target;
+    if (!image.matches?.(".product-card-image") || image.dataset.fallbackApplied === "true") return;
+    image.dataset.fallbackApplied = "true";
+    image.removeAttribute("src");
+    image.alt = "Selected image unavailable";
+  }
+
+  async getCatalog() {
+    try {
+      const [categories] = await Promise.all([this.getCategoryFilters(), this.fetchGetProducts()]);
+      this.drawCategoryFilters(categories, this.productsData);
+      this.applyFilters();
+    } catch (error) {
+      console.error("Error loading product filters:", error);
+    }
+  }
+
+  async makeRequest(url, data, options = {}) {
+    const {
+      requireSuccess = false,
+      responseType = "json",
+      ...requestOptions
+    } = options;
+    const isFormData = data instanceof FormData;
+    const headers = new Headers(requestOptions.headers || {});
+    if (!isFormData && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      ...requestOptions,
+      headers,
+      body: isFormData ? data : JSON.stringify(data)
+    });
+    const text = await response.text();
+    let result;
+    try {
+      result = responseType === "text" ? text : JSON.parse(text);
+    } catch {
+      const error = new Error("The server returned an invalid response.");
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.ok || requireSuccess && !result?.success) {
+      const error = new Error(result?.error || result?.message || "The request could not be completed.");
+      error.status = response.status;
+      error.code = result?.code || null;
+      error.details = result;
+      throw error;
+    }
+    return result;
+  }
+}
+const productsClass = new ProductsClass();

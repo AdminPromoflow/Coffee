@@ -1,0 +1,28 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const context=vm.createContext({});
+vm.runInContext(fs.readFileSync('view/global/delivery_options/common_delivery.js','utf8').replaceAll('export function','function')+'\nthis.commonDelivery=commonDelivery;',context);
+const calculate=context.commonDelivery;
+const opt=(days,value,type='percentage')=>({days,value,type});
+const catalog={variations:[{id:1,name:'A',options:[opt(8,25),opt(10,10)]},{id:2,name:'B',options:[opt(8,25,'amount'),opt(10,15,'amount')]},{id:3,name:'Other',options:[opt(3,99)]}],prices:[{id:9,variationId:1,min:1,max:99,options:[opt(8,23),opt(10,0)]},{id:10,variationId:1,min:100,max:null,options:[opt(15,5)]}]};
+let result=calculate(catalog,[1,2],9,10,10000);
+assert.deepEqual(JSON.parse(JSON.stringify(result.options.map(o=>[o.days,o.pence]))),[[8,7300],[10,2500]]);
+assert.equal(result.options[0].breakdown.length,3);
+result=calculate(catalog,[1,2,1],9,10,20000);assert.equal(result.options[0].pence,12100);
+assert.equal(calculate(catalog,[1,2],10,100,10000).options.length,0);
+assert.equal(calculate(catalog,[1,3],9,10,10000).options.length,0);
+assert.equal(calculate({variations:[],prices:[]},[],0,0,0).configured,false);
+const extras={variations:[{id:1,name:'Base',options:[]},{id:2,name:'Extra',mode:'variation',options:[]}],prices:[{id:1,variationId:1,min:1,max:null,options:[opt(8,0)]},{id:2,variationId:2,min:1,max:9,options:[opt(8,5,'amount')]},{id:3,variationId:2,min:10,max:null,options:[opt(8,10,'amount')]}]};
+assert.equal(calculate(extras,[1,2],1,5,1000).options[0].pence,500);
+assert.equal(calculate(extras,[1,2],1,10,1000).options[0].pence,1000);
+assert.equal(calculate({variations:[{id:1,options:[opt(8,50)]}]},[1],0,1,1).options[0].pence,1);
+// Exercise the shared controller, not only the calculation helper.
+let selectedOptions=[];
+const controllerContext=vm.createContext({commonDelivery:calculate,renderDelivery:(_container,result,selected)=>result.options.find(o=>String(o.days)===String(selected))||result.options.at(-1)||null,document:{querySelectorAll:()=>selectedOptions}});
+const source=fs.readFileSync('view/preview_product_customers/prices/prices.js','utf8').replace(/^const .*await import.*\n/gm,'').replace('export class PricesController','class PricesController');
+const Controller=vm.runInContext(source+'\nPricesController;',controllerContext);
+const app=Object.create(Controller.prototype);app.store={deliveryCatalog:catalog,getSelectedVariationIds:()=>[1,2],selectedQuantity:10,selectedPrice:10,selectedPriceId:9,selectedDelivery:'8'};
+app.elements=Object.fromEntries(['unit','quantity','unitTotal','extraUnit','extraQuantity','extraTotal','deliveryPercentage','deliverySurcharge','total','mainPrice','quantityLabel','unitHint'].map(key=>[key,{textContent:''}]));
+app.deliveryOptions=null;let summary;app.onSummaryChange=value=>summary=value;
+app.updateSummary();assert.equal(app.elements.total.textContent,'£173.00');assert.equal(summary.ready,true);
+app.store.selectedPriceId=10;app.store.selectedQuantity=100;app.updateSummary();assert.equal(summary.ready,false);assert.equal(app.elements.total.textContent,'—');
+console.log('Common delivery: mixed fees, intersection, quantity tiers, extras, deduplication, rounding and shared preview totals passed.');

@@ -1,0 +1,436 @@
+/*
+ * MAPA DEL PREVIEW DEL CLIENTE
+ * 3. Este archivo coordina todos los módulos.
+ * 4. Se pide el producto al servidor.
+ * 5. Se guarda y se pinta la información general.
+ * 6. Se recorre el árbol de variaciones.
+ * 7. Se pintan los recursos de la ruta seleccionada.
+ * 8. Se calcula el precio.
+ * 9. La pantalla queda lista para interacciones.
+ * 10. El cliente agrega al carrito; si hace falta, se autentica y se reintenta.
+ */
+
+// [Customer 3.1] preview.php añadió una versión a esta URL. La reutilizamos en cada import
+// para que todos los archivos pertenezcan a la misma versión y no se mezclen módulos de caché.
+const moduleVersion = new URL(import.meta.url).searchParams.get("v") || "1";
+const versionedModule = path => {
+  const url = new URL(path, import.meta.url);
+  url.searchParams.set("v", moduleVersion);
+  return url.href;
+};
+
+// [Customer 3.2] Los ocho módulos son independientes al descargarse, por eso se cargan en paralelo.
+// Promise.all espera a que estén todos listos antes de crear la aplicación.
+const [{
+  PreviewApi
+}, {
+  PreviewStore
+}, {
+  PreviewGallery
+}, {
+  ImagesRenderer
+}, {
+  ItemsRenderer
+}, {
+  ArtworkRenderer,
+  ArtworkUpload
+}, {
+  PricesController
+}, {
+  VariationsController,
+  readVariationInput
+}, {
+  CustomerAuthModal
+}] = await Promise.all([import(versionedModule("./preview_api.js")), import(versionedModule("./preview_store.js")), import(versionedModule("./preview.js")), import(versionedModule("../images/images.js")), import(versionedModule("../items/items.js")), import(versionedModule("../artwork/artwork.js")), import(versionedModule("../prices/prices.js")), import(versionedModule("../variations/variations.js")), import(versionedModule("./auth.js"))]);
+
+// [Customer 10.4] Este módulo controla el modal que aparece únicamente cuando el carrito
+// responde con 401/AUTH_REQUIRED. Conserva la selección mientras el cliente se identifica.
+
+// [Customer 3.3] Esta clase es el coordinador: conecta API, estado, renderizadores,
+// precios, variaciones, carrito y autenticación en un único flujo.
+class CustomerPreviewApp {
+  constructor() {
+    // [Customer 3.3.1] El SKU de la URL identifica el producto público que se debe consultar.
+    this.params = new URLSearchParams(window.location.search);
+    this.sku = String(this.params.get("sku") || "").trim();
+    this.variationInput = readVariationInput(this.params);
+    this.api = new PreviewApi();
+    this.store = new PreviewStore();
+    this.loadController = null;
+
+    // [Customer 3.3.2] Cada módulo recibe solo las dependencias y callbacks que necesita.
+    this.gallery = new PreviewGallery();
+    this.images = new ImagesRenderer();
+    this.items = new ItemsRenderer();
+    this.artwork = new ArtworkRenderer();
+    this.artworkUpload = new ArtworkUpload();
+    this.prices = new PricesController({
+      api: this.api,
+      store: this.store,
+      getSku: () => this.sku,
+      onSummaryChange: summary => this.updatePurchaseActions(summary)
+    });
+    this.variations = new VariationsController({
+      api: this.api,
+      store: this.store,
+      prices: this.prices,
+      preferredOptions: this.variationInput.options,
+      renderPath: () => this.renderSelectedPath(),
+      onError: message => this.showMessage(message, "error")
+    });
+
+    // [Customer 3.3.3] Guardamos una sola referencia a cada elemento importante del DOM.
+    this.elements = {
+      loading: document.getElementById("preview_loading"),
+      content: document.getElementById("preview_content"),
+      fatal: document.getElementById("preview_fatal"),
+      fatalMessage: document.getElementById("preview_fatal_message"),
+      notice: document.getElementById("preview_notice"),
+      back: document.getElementById("btn_back_products"),
+      addToCart: document.getElementById("bb_add_to_cart"),
+      buyNow: document.getElementById("bb_buy_now"),
+      itemsSection: document.getElementById("items_section")
+    };
+    this.purchaseReady = false;
+    this.purchasePending = false;
+    this.purchaseConfirming = false;
+    this.pendingPurchase = null;
+    this.auth = new CustomerAuthModal({
+      api: this.api,
+      onAuthenticated: () => this.resumePendingPurchase(),
+      onDismissed: () => this.cancelPendingPurchase()
+    });
+    {
+      // [Customer 3.4] Los eventos se conectan una sola vez al construir la aplicación.
+      this.elements.back?.addEventListener("click", () => this.goBack());
+      this.elements.addToCart?.addEventListener("click", () => this.submitPurchase(false));
+      this.elements.buyNow?.addEventListener("click", () => this.submitPurchase(true));
+    }
+    this.getProduct();
+  }
+
+  async getProduct() {
+    // [Customer 3.5] Sin SKU no existe una consulta que hacer, así que mostramos un error y terminamos.
+    if (!this.sku) {
+      this.showFatal("The product SKU is missing from this link.");
+      return;
+    }
+    this.setLoading(true);
+    this.loadController?.abort();
+    this.loadController = new AbortController();
+    try {
+      // [Customer 4] El método consulta el producto con su makeRequest local.
+      const payload = await this.makeRequest(this.api.previewUrl, {
+        action: "get_customer_preview",
+        sku: this.sku
+      }, {
+        requireSuccess: true,
+        signal: this.loadController.signal
+      });
+
+      // [Customer 5] Con una respuesta válida guardamos el producto y pintamos sus datos generales.
+      this.store.setProduct(payload);
+      this.renderProduct(payload);
+
+      // [Customer 6] Después recorremos las variaciones desde la raíz. Este proceso también elige
+      // opciones predeterminadas y dispara los pasos 7 y 8 en cada cambio de ruta.
+      await this.variations.loadRoot(payload.root_variation_id);
+
+      // [Customer 9] Solo mostramos la pantalla cuando producto, opciones y precio inicial están coordinados.
+      this.setLoading(false);
+    } catch (error) {
+      // [Customer 4.1] AbortError significa que una solicitud anterior fue reemplazada; no es un fallo visible.
+      if (error.name === "AbortError") return;
+      this.showFatal(error.message || "The product could not be loaded.");
+    }
+  }
+
+  renderProduct(payload) {
+    // [Customer 5.1] Normalizamos valores opcionales para que la interfaz nunca muestre undefined.
+    const product = payload.product || {};
+    const category = product.category?.name || "Uncategorised";
+    const group = product.group?.name || "No group";
+    this.setText("sp_category", category);
+    this.setText("sp-title", product.name || "Untitled product");
+    this.setText("sp-brand", product.supplier_name || "Supplier");
+    this.setText("sp_subtitle", product.tagline || "No product tagline has been added yet.");
+    this.setText("sp_desc", product.description || "No product description has been added yet.");
+    this.setText("product_sku", product.sku || this.sku);
+
+    // [Customer 5.2] Las migas se construyen con textContent, así los datos se muestran como texto seguro.
+    const breadcrumbs = document.getElementById("sp_breadcrumbs");
+    if (breadcrumbs) {
+      breadcrumbs.innerHTML = "";
+      [category, group, product.name || "Preview"].forEach((label, index, values) => {
+        const item = document.createElement("li");
+        const text = document.createElement("span");
+        text.textContent = label;
+        if (index === values.length - 1) text.setAttribute("aria-current", "page");
+        item.appendChild(text);
+        breadcrumbs.appendChild(item);
+      });
+    }
+  }
+
+  renderSelectedPath() {
+    // [Customer 7] VariationsController llama este método cada vez que cambia una selección.
+    // Primero se elimina la representación anterior para reconstruir una vista coherente.
+    this.images.clear();
+    this.items.clear();
+    this.artwork.clear();
+    this.gallery.clear();
+    const imageKeys = new Set();
+    const itemKeys = new Set();
+    let renderedItems = 0;
+
+    // [Customer 7.1] Store devuelve la raíz y todas las variaciones elegidas en orden.
+    const selectedRows = this.store.getSelectedRows();
+    for (const row of selectedRows) {
+      const variation = row?.variation || {};
+      const variationName = String(variation.name || "").trim();
+
+      // [Customer 7.2] Los Set impiden pintar dos veces recursos que llegan desde varios niveles.
+      const uniqueImages = (Array.isArray(row?.images) ? row.images : []).filter(image => {
+        const key = String(image?.image_id ?? image?.link ?? "");
+        if (!key || imageKeys.has(key)) return false;
+        imageKeys.add(key);
+        return true;
+      });
+
+      // [Customer 7.3.1] ImagesRenderer crea las imágenes de este nivel.
+      this.images.render(uniqueImages, {
+        productName: this.store.product?.name,
+        variationName
+      });
+      const uniqueItems = (Array.isArray(row?.items) ? row.items : []).filter(item => {
+        const key = String(item?.item_id ?? `${item?.name}:${item?.description}`);
+        if (!key || itemKeys.has(key)) return false;
+        itemKeys.add(key);
+        return true;
+      });
+      // [Customer 7.3.2] ItemsRenderer agrega datos complementarios del producto.
+      renderedItems += this.items.render(uniqueItems);
+      if (row?.artwork) {
+        // [Customer 7.3.3] ArtworkRenderer agrega el PDF asociado, si existe.
+        this.artwork.render(row.artwork, {
+          variationName
+        });
+      }
+    }
+
+    // [Customer 7.4] Se pinta el estado vacío si corresponde y la galería vuelve a empezar.
+    this.images.renderEmpty();
+    this.gallery.refresh({
+      keepIndex: false
+    });
+    if (this.elements.itemsSection) this.elements.itemsSection.hidden = renderedItems === 0;
+
+    // [Customer 7.5] El precio base viene del nivel más específico con modo "prices";
+    // las opciones con modo "variation" se calculan como extras.
+    const priceSource = [...selectedRows].reverse().find(row => {
+      return String(row?.variation?.price_display_mode ?? "prices") === "prices" && Array.isArray(row?.prices) && row.prices.length > 0;
+    });
+    if (priceSource) {
+      // [Customer 8] PricesController pinta los rangos, selecciona uno y calcula el resumen.
+      const rows = priceSource.prices.map(price => ({
+        ...price,
+        price_display_mode: priceSource.variation?.price_display_mode || "prices"
+      }));
+      this.prices.render(rows);
+    } else {
+      this.prices.clear();
+    }
+  }
+
+  goBack() {
+    // [Customer 9.1] Este botón regresa al listado público de productos.
+    window.location.assign(new URL("../../view/product/index.php", window.location.href));
+  }
+
+  updatePurchaseActions(summary = {}) {
+    // [Customer 8.5] PricesController informa si existe una combinación completa y comprable.
+    this.purchaseReady = Boolean(summary.ready);
+    const disabled = !this.purchaseReady || this.purchasePending;
+    if (this.elements.addToCart) this.elements.addToCart.disabled = disabled;
+    if (this.elements.buyNow) this.elements.buyNow.disabled = disabled;
+  }
+
+  async submitPurchase(buyNow, savedPayload = null) {
+    // [Customer 10.1] No enviamos compras incompletas ni permitimos dos solicitudes simultáneas.
+    if (!this.purchaseReady || this.purchasePending || this.purchaseConfirming) return;
+    if (!savedPayload && !this.artworkUpload.validateSelection()) {
+      this.artworkUpload.input?.focus();
+      return;
+    }
+    if (!savedPayload && !this.artworkUpload.getFile()) {
+      this.purchaseConfirming = true;
+      try {
+        if (!await this.artworkUpload.confirmWithoutArtwork()) return;
+      } finally {
+        this.purchaseConfirming = false;
+      }
+      if (!this.purchaseReady || this.purchasePending) return;
+    }
+
+    // [Customer 10.1.1] Si venimos de autenticación usamos la copia guardada; de lo contrario,
+    // tomamos la cantidad, price_id y variaciones seleccionadas actualmente.
+    const quantity = Number(savedPayload?.quantity ?? this.store.selectedQuantity);
+    const priceId = Number(savedPayload?.price_id ?? this.store.selectedPriceId);
+    const variationIds = savedPayload?.variation_ids ? [...savedPayload.variation_ids] : [...new Set(this.store.getSelectedVariationIds())];
+    if (!Number.isInteger(quantity) || quantity <= 0 || !Number.isInteger(priceId) || priceId <= 0) {
+      this.showMessage("Please choose a valid product quantity before continuing.", "error");
+      return;
+    }
+    const purchasePayload = savedPayload || {
+      sku: this.sku,
+      quantity,
+      price_id: priceId,
+      variation_ids: variationIds,
+      intent: buyNow ? "buy_now" : "add_to_cart",
+      artwork_pdf: this.artworkUpload.getFile()
+    };
+    this.setPurchasePending(true, buyNow ? this.elements.buyNow : this.elements.addToCart);
+    this.hideMessage();
+    try {
+      // [Customer 10.2] PreviewApi envía la selección a controller/order/cart.php.
+      const request = new FormData();
+      request.append("action", "add_to_cart");
+      for (const key of ["sku", "quantity", "price_id", "intent"]) request.append(key, purchasePayload[key]);
+      purchasePayload.variation_ids.forEach(id => request.append("variation_ids[]", id));
+      if (purchasePayload.artwork_pdf) {
+        request.append("artwork_pdf", purchasePayload.artwork_pdf);
+        this.artworkUpload.setStatus("Uploading your artwork…");
+      }
+      const result = await this.makeRequest(this.api.cartUrl, request, {
+        requireSuccess: true
+      });
+
+      // [Customer 10.3] En éxito limpiamos el intento pendiente y avisamos al contador global del carrito.
+      this.pendingPurchase = null;
+      this.artworkUpload.markSaved(purchasePayload.artwork_pdf);
+      this.showMessage(result.message || "The product was added to your cart.", "success");
+      window.dispatchEvent(new CustomEvent("promoflow:cart-updated", {
+        detail: {
+          count: Number(result.cart_count) || 1
+        }
+      }));
+      if (buyNow) {
+        // [Customer 10.7] "Buy now" usa el mismo carrito y luego lleva al cliente a revisarlo.
+        window.location.assign(new URL("../../view/shopping_cart/index.php", window.location.href));
+      }
+    } catch (error) {
+      if (purchasePayload.artwork_pdf) {
+        this.artworkUpload.setStatus(error.status === 401
+          ? "Your PDF is selected. Sign in to upload it with this product."
+          : "Your artwork has not been saved. Please try adding the product again.");
+      }
+      // [Customer 10.4] Un 401/AUTH_REQUIRED no descarta la configuración: la guardamos y abrimos el modal.
+      if (error.status === 401 && (!error.code || error.code === "AUTH_REQUIRED")) {
+        this.pendingPurchase = {
+          buyNow,
+          payload: purchasePayload
+        };
+        this.showMessage(error.message, "info");
+        this.auth.open("login", error.message);
+        return;
+      }
+      this.pendingPurchase = null;
+      this.showMessage(error.message || "The product could not be added to your cart.", "error");
+    } finally {
+      this.setPurchasePending(false);
+    }
+  }
+
+  async resumePendingPurchase() {
+    // [Customer 10.6] Después de login/registro se repite exactamente el payload que había fallado.
+    const pending = this.pendingPurchase;
+    if (!pending) return;
+    this.showMessage("You are signed in. Adding your selected product…", "info");
+    await this.submitPurchase(pending.buyNow, pending.payload);
+  }
+
+  cancelPendingPurchase() {
+    // [Customer 10.4.11] Cerrar el modal cancela solo el intento; las opciones visibles siguen seleccionadas.
+    this.pendingPurchase = null;
+    this.showMessage("Sign in or create an account when you are ready to continue.", "info");
+  }
+
+  setPurchasePending(pending, activeButton = null) {
+    // [Customer 10.1.2] Mientras el servidor responde, ambos botones quedan bloqueados.
+    this.purchasePending = pending;
+    this.artworkUpload.setPending(pending);
+    [this.elements.addToCart, this.elements.buyNow].forEach(button => {
+      if (!button) return;
+      button.disabled = pending || !this.purchaseReady;
+      button.classList.toggle("is-loading", pending && button === activeButton);
+      button.setAttribute("aria-busy", String(pending && button === activeButton));
+    });
+  }
+
+  // [Customer 11] Estos métodos pequeños concentran cambios repetidos de interfaz.
+
+  setLoading(loading) {
+    if (this.elements.loading) this.elements.loading.hidden = !loading;
+    if (this.elements.content) this.elements.content.hidden = loading;
+  }
+
+  showFatal(message) {
+    this.setLoading(false);
+    if (this.elements.content) this.elements.content.hidden = true;
+    if (this.elements.fatal) this.elements.fatal.hidden = false;
+    if (this.elements.fatalMessage) this.elements.fatalMessage.textContent = message;
+  }
+
+  showMessage(message, tone = "info") {
+    if (!this.elements.notice) return;
+    this.elements.notice.textContent = message;
+    this.elements.notice.dataset.tone = tone;
+    this.elements.notice.setAttribute("role", tone === "error" ? "alert" : "status");
+    this.elements.notice.hidden = false;
+  }
+
+  hideMessage() {
+    if (this.elements.notice) this.elements.notice.hidden = true;
+  }
+
+  setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value ?? "");
+  }
+
+  async makeRequest(url, data, options = {}) {
+    const {
+      requireSuccess = false,
+      responseType = "json",
+      ...requestOptions
+    } = options;
+    const isFormData = data instanceof FormData;
+    const headers = new Headers(requestOptions.headers || {});
+    if (!isFormData && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      ...requestOptions,
+      headers,
+      body: isFormData ? data : JSON.stringify(data)
+    });
+    const text = await response.text();
+    let result;
+    try {
+      result = responseType === "text" ? text : JSON.parse(text);
+    } catch {
+      const error = new Error("The server returned an invalid response.");
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.ok || requireSuccess && !result?.success) {
+      const error = new Error(result?.error || result?.message || "The request could not be completed.");
+      error.status = response.status;
+      error.code = result?.code || null;
+      error.details = result;
+      throw error;
+    }
+    return result;
+  }
+}
+const app = new CustomerPreviewApp();

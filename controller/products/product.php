@@ -1,0 +1,433 @@
+<?php
+require_once __DIR__ . "/../security/catalog_access.php";
+
+class Product {
+  public function handleProduct(){
+
+    $input = file_get_contents('php://input');
+    $data  = json_decode($input, true);
+
+    CatalogAccess::enforce('product', is_array($data) ? $data : []);
+
+    switch ($data["action"] ?? null) {
+      case 'create_new_product':
+        $this->createNewProduct();
+      break;
+
+      case 'get_products':
+        $this->getProducts();
+      break;
+
+      case 'search_products':
+        $this->searchProducts($data);
+      break;
+
+      case 'get_status_three_variations':
+        $this->getStatusThreeVariations($data);
+      break;
+
+      case 'get_products_by_group':
+        $this->getProductsByGroup($data);
+      break;
+
+      case 'update_products':
+        $this->getUpdate();
+      break;
+
+      case 'update_category':
+        $this->updateCategory($data);
+      break;
+
+      case 'update_group':
+        $this->updateGroup($data);
+      break;
+
+      case 'save_product_details':
+        $this->saveProductDetails($data);
+      break;
+
+      case 'get_all_products_supplier':
+        $this->getProductsBasicBySupplierEmail($data);
+      break;
+
+      case 'get_editor_selection':
+        $this->getEditorSelection($data);
+      break;
+
+      case 'get_product_details':
+        $this->getProductBasicBySKU($data);
+      break;
+
+      case 'get_preview_product_details':
+        $this->getPreviewProductDetails($data);
+      break;
+
+      case 'publish_product':
+        $this->publishProduct($data);
+      break;
+
+      case 'get_default_variation_by_sku':
+      $this->getDefaultVariationBySKU($data);
+      break;
+
+      case 'delete_product':
+      $this->deleteProduct($data);
+      break;
+
+      default:
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['response' => false, 'error' => 'Unsupported action']);
+        break;
+    }
+  }
+
+  private function deleteProduct($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $database = new Database();
+    $product = new Products($database);
+    $product->setSku($data['sku'] ?? '');
+    $result = $product->deleteProduct();
+
+    echo json_encode(
+        $result,
+        JSON_UNESCAPED_UNICODE
+    );
+
+  }
+
+  private function getDefaultVariationBySKU($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $connection = new Database();
+    $product   = new Variation($connection);
+
+
+    $product->setSku($data['sku'] ?? '');
+
+    $response = $product->getDefaultVariationBySKU();
+
+    echo json_encode($response);
+  }
+
+
+  private function getProductsByGroup($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+      Dot63Security::startSession();
+    }
+
+    $email    = $_SESSION['email'] ?? null;
+    $sku     = $data["sku"];
+
+    $connection = new Database();
+    $products   = new Products($connection);
+
+    $products->setSku($sku);
+    $products->setEmail($email);
+
+    $response = $products->getProductsByGroupId();
+
+    echo json_encode($response);
+  }
+
+  private function supplierEmail(): string
+  {
+    if (session_status() !== PHP_SESSION_ACTIVE) Dot63Security::startSession();
+    $email = strtolower(trim((string)($_SESSION['email'] ?? '')));
+    if (empty($_SESSION['login']) || $email === '') {
+      throw new RuntimeException('Your supplier session has expired. Please sign in again.', 401);
+    }
+    return $email;
+  }
+
+  private function statusError(Throwable $error): void
+  {
+    if ($error instanceof PDOException && (string)$error->getCode() === '42S22'
+        && preg_match('/pending_status|status_request_version|status_requested_at/', $error->getMessage())) {
+      error_log('Product status schema missing: apply controller/config/migrations/20261101_add_product_status_review.sql');
+      http_response_code(503);
+      echo json_encode(['success' => false, 'message' => 'Product saving is unavailable until the product approval database update is installed. Please contact the administrator.']);
+      return;
+    }
+    $code = (int)$error->getCode();
+    http_response_code(in_array($code, [401, 403, 404, 409, 422, 502], true) ? $code : 500);
+    if ($code < 400 || $code > 599) error_log('Product status error: ' . $error->getMessage());
+    echo json_encode(['success' => false, 'message' => $code >= 400 && $code <= 599 ? $error->getMessage() : 'Unable to save the product. Please try again.']);
+  }
+
+  private function sendStatusNotice(array $product): bool
+  {
+    $sender = new EmailsSender();
+    $sender->setRecipientEmail('admin@promoflow.net');
+    $sender->setRecipientName('PromoFlow Admin');
+    $sender->setProductName($product['name']);
+    $sender->setProductSku($product['SKU']);
+    $sender->setSupplierName($product['supplier_name']);
+    $sender->setSupplierEmail($product['supplier_email']);
+    $sender->setProductStatusChange($product['status_label'], $product['pending_status_label']);
+    return $sender->sendEmailProductApprovalNotice();
+  }
+
+  private function publishProduct($data)
+  {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $email = $this->supplierEmail();
+      $workflow = new ProductStatus(new Database());
+      $sku = trim((string)($data['sku'] ?? ''));
+      $product = $workflow->getOwned($sku, $email);
+      if ($product['pending_status'] !== null) {
+        echo json_encode(['success' => true, 'message' => 'This product already has a request awaiting approval.', 'data' => $product]);
+        return;
+      }
+      if ($product['status'] !== 0 && !empty($product['is_approved'])) {
+        echo json_encode(['success' => true, 'message' => 'This product is already approved.', 'data' => $product]);
+        return;
+      }
+      $result = $workflow->saveDetails($sku, $email, [
+        'status' => 1,
+        'status_request_version' => $data['status_request_version'] ?? null,
+      ], fn(array $notice): bool => $this->sendStatusNotice($notice), true);
+      echo json_encode($result);
+    } catch (Throwable $error) {
+      $this->statusError($error);
+    }
+  }
+
+  private function getPreviewProductDetails($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    echo json_encode("response");
+  }
+
+  private function getEditorSelection(array $data): void
+  {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    try {
+      $email = $this->supplierEmail();
+      $database = new Database();
+      $product = (new ProductStatus($database))->getOwned((string)($data['sku'] ?? ''), $email);
+      $variationName = null;
+      $variationSku = trim((string)($data['sku_variation'] ?? ''));
+      if ($variationSku !== '') {
+        // A variation from another product must never appear in this product's summary.
+        $statement = $database->getConnection()->prepare('
+          SELECT name FROM variations
+          WHERE product_id = :product_id AND LOWER(SKU) = LOWER(:sku) LIMIT 1
+        ');
+        $statement->execute([':product_id' => $product['product_id'], ':sku' => $variationSku]);
+        $variationName = $statement->fetchColumn() ?: null;
+      }
+      echo json_encode(['success' => true, 'selection' => [
+        'category' => ($product['category_name'] ?? '') === 'Unassigned Category' ? null : ($product['category_name'] ?? null),
+        'group' => ($product['group_name'] ?? '') === 'Unassigned Group' ? null : ($product['group_name'] ?? null),
+        'product' => $product['name'] ?? null,
+        'variation' => $variationName,
+      ]], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $error) {
+      $this->statusError($error);
+    }
+  }
+
+  private function getProductBasicBySKU($data)
+  {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $email = $this->supplierEmail();
+      $product = (new ProductStatus(new Database()))->getOwned((string)($data['sku'] ?? ''), $email);
+      echo json_encode(['success' => true, 'data' => $product]);
+    } catch (Throwable $error) {
+      $this->statusError($error);
+    }
+  }
+
+  private function getProductsBasicBySupplierEmail(){
+    header('Content-Type: application/json; charset=utf-8');
+    $connection = new Database();
+    $products   = new Products($connection);
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+      Dot63Security::startSession();
+    }
+
+    $products->setEmail($_SESSION['email']);
+
+    $response   = $products->getProductsBasicBySupplierEmail();
+    echo ($response);
+  }
+
+  private function saveProductDetails($data)
+  {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+      $email = $this->supplierEmail();
+      $data['descriptive_tagline'] = $data['pd_tagline'] ?? '';
+      $response = (new ProductStatus(new Database()))->saveDetails(
+        (string)($data['sku'] ?? ''), $email, $data,
+        fn(array $notice): bool => $this->sendStatusNotice($notice)
+      );
+      echo json_encode($response);
+    } catch (Throwable $error) {
+      $this->statusError($error);
+    }
+  }
+
+  private function updateCategory(array $data) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $connection = new Database();
+    $product    = new Products($connection);
+
+    $sku = isset($data['sku']) ? trim((string)$data['sku']) : '';
+    $categoryId = $data['id'] ?? null;
+
+    $product->setSku($sku);
+    $product->setCategoryId($categoryId);
+    $response = $product->updateCategoryIdBySKU();
+
+    echo json_encode($response);
+  }
+
+  private function updateGroup(array $data) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+      Dot63Security::startSession();
+    }
+
+    $connection = new Database();
+    $product    = new Products($connection);
+
+    $sku = isset($data['sku']) ? trim((string)$data['sku']) : '';
+    $group_id = $data['group_id'] ?? null;
+
+    $_SESSION['group_id'] = $group_id;
+
+    $product->setSku($sku);
+    $product->setGroupId($group_id);
+    $response = $product->updateGroupIdBySKU();
+
+    echo json_encode($response);
+  }
+
+  private function createNewProduct(){
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    $connection = new Database();
+    $products   = new Products($connection);
+
+    $sku = $this->generate_sku();
+    $products->setSku($sku);
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+      Dot63Security::startSession();
+    }
+
+    $email = $_SESSION['email'] ?? '';
+    if ($email === '') {
+      echo json_encode(['success' => false, 'error' => 'Email required in session'], JSON_UNESCAPED_UNICODE);
+      return;
+    }
+
+    $products->setEmail($email);
+
+    $response = $products->create();
+
+    if ($response['success']) {
+      $variation = new Variations();
+      $response2 = $variation->createDefaultVariation($response['id']);
+
+      if ($response2['success']) {
+        $result =  ['success' => true, 'sku' => $response['sku'], 'all_variation' => $response2];
+
+        echo json_encode($result);
+      }
+    }
+  }
+
+  private function generate_sku(string $prefix = 'PRD'): string {
+    $dt    = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $stamp = $dt->format('Ymd-His-u');
+    $rand  = strtoupper(bin2hex(random_bytes(5)));
+    return sprintf(
+      '%s-%s-%s',
+      strtoupper(preg_replace('/[^A-Z0-9]/', '', $prefix)),
+      $stamp,
+      $rand
+    );
+  }
+
+  private function getProducts(){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $connection = new Database();
+    $products   = new Products($connection);
+
+    $response   = $products->getProducts();
+
+    echo json_encode($response);
+  }
+
+  private function searchProducts($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $search = trim((string)($data['search'] ?? ''));
+
+    if (mb_strlen($search) > 200) {
+      http_response_code(422);
+      echo json_encode([
+        'success' => false,
+        'error' => 'Search text is too long'
+      ]);
+      return;
+    }
+
+    $connection = new Database();
+    $products = new Products($connection);
+    $response = $products->searchProducts($search);
+
+    echo json_encode($response);
+  }
+
+  private function getStatusThreeVariations($data){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $productIds = is_array($data['product_ids'] ?? null)
+      ? array_slice($data['product_ids'], 0, 200)
+      : [];
+
+    $connection = new Database();
+    $products = new Products($connection);
+
+    echo json_encode(
+      $products->getStatusThreeEligibleVariations($productIds),
+      JSON_UNESCAPED_UNICODE
+    );
+  }
+
+  private function getUpdate(){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $connection = new Database();
+    $products   = new Products($connection);
+    $response   = $products->getAllNames();
+
+    echo ($response);
+  }
+}
+
+require_once "../../controller/config/database.php";
+
+require_once "../../model/products.php";
+require_once __DIR__ . "/../../model/product_status.php";
+
+require_once "../../controller/products/variations.php";
+require_once "../../controller/emails/send_emails.php";
+
+$productClass = new Product();
+
+$productClass->handleProduct();

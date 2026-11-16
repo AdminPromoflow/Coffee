@@ -1,0 +1,387 @@
+<?php
+class Images {
+  // ===== Atributos =====
+  private $connection;          // PDO wrapper (->getConnection())
+  private $product_id;          // FK al producto (padre)
+  private $sku  = null;
+  private $sku_variation = null;
+  private $image_address;
+  private $show_on_product_main = 0;
+
+  // ===== Constructor =====
+  public function __construct($connection) { $this->connection = $connection; }
+
+  // ===== Setters =====
+  public function setId($id)              { $this->product_id = (int)$id; }
+  public function setShowOnProductMain(int $value): void { $this->show_on_product_main = $value === 1 ? 1 : 0; }
+
+  public function updateMainVisibility(int $imageId, int $value): bool
+  {
+      $pdo = $this->connection->getConnection();
+      $params = [':id' => $imageId, ':sku' => $this->sku_variation];
+      $find = $pdo->prepare('SELECT i.image_id FROM images i JOIN variations v ON v.variation_id = i.variation_id WHERE i.image_id = :id AND v.SKU = :sku');
+      $find->execute($params);
+      if (!$find->fetchColumn()) return false;
+      $stmt = $pdo->prepare('UPDATE images i JOIN variations v ON v.variation_id = i.variation_id SET i.show_on_product_main = :visible WHERE i.image_id = :id AND v.SKU = :sku');
+      return $stmt->execute($params + [':visible' => $value === 1 ? 1 : 0]);
+  }
+
+  public function setSKU(?string $v)      { $v = trim((string)$v); $this->sku  = ($v === '') ? null : $v; }
+
+
+  public function setImageAddress(?string $v)      { $v = trim((string)$v); $this->image_address  = ($v === '') ? null : $v; }
+
+  public function setSKUVariation(?string $v)      { $v = trim((string)$v); $this->sku_variation  = ($v === '') ? null : $v; }
+  //public function setImage(?string $v)    { $v = trim((string)$v); $this->image = ($v === '') ? null : $v; }
+
+  public function deleteImageBySkuVariationAndLink(): bool
+  {
+
+
+      $vsku = $this->sku_variation ?? null;
+      $link = $this->image_address ?? null;
+
+      if (!$vsku || !$link) {
+          return false; // Faltan datos obligatorios
+      }
+    //  echo json_encode(["variationId"=> $variationId]);exit;
+
+      try {
+          $pdo = $this->connection->getConnection();
+
+          // 1. Obtener el ID de la variación usando el SKU
+          $stmtVar = $pdo->prepare("SELECT variation_id FROM variations WHERE SKU = :sku LIMIT 1");
+          $stmtVar->execute([':sku' => $vsku]);
+          $variation = $stmtVar->fetch(\PDO::FETCH_ASSOC);
+
+
+
+          if (!$variation) {
+              return false; // No se encontró la variación
+          }
+
+          $variationId = $variation['variation_id'];
+
+
+
+          // 2. Eliminar la imagen que coincida con el link y el id de variación
+          $stmtDel = $pdo->prepare("
+              DELETE FROM images
+              WHERE variation_id = :vid
+                AND link = :link
+          ");
+
+          return $stmtDel->execute([
+              ':vid'  => $variationId,
+              ':link' => $link
+          ]);
+
+      } catch (\PDOException $e) {
+          error_log('deleteImageBySkuVariationAndLink: ' . $e->getMessage());
+          return false;
+      }
+  }
+
+  public function deleteImageWhereUpdatedIs0BySkuVariation(): bool
+{
+    $vsku = $this->sku_variation ?? null;
+    if (!$vsku) {
+        return false; // SKU de la variación requerido
+    }
+
+    try {
+        $pdo = $this->connection->getConnection();
+
+        // Borrar todas las imágenes de esa variación con updated = 0
+        $stmt = $pdo->prepare("
+            DELETE i
+            FROM images i
+            INNER JOIN variations v ON v.variation_id = i.variation_id
+            WHERE v.SKU = :vsku
+              AND i.updated = 0
+        ");
+
+        return $stmt->execute([':vsku' => $vsku]);
+    } catch (\PDOException $e) {
+        error_log('deleteImageWhereUpdatedIs0BySkuVariation: '.$e->getMessage());
+        return false;
+    }
+}
+
+
+
+  public function setTo0UpdatedBySKUVariation(): bool
+  {
+      $vsku = $this->sku_variation ?? null;
+      if (!$vsku) {
+          return false; // SKU de la variación requerido
+      }
+
+      try {
+          $pdo = $this->connection->getConnection();
+          $stmt = $pdo->prepare("
+              UPDATE images i
+              JOIN variations v ON v.variation_id = i.variation_id
+              SET i.updated = 0
+              WHERE v.SKU = :vsku
+          ");
+          return $stmt->execute([':vsku' => $vsku]);
+      } catch (\PDOException $e) {
+          error_log('SetTo0UpdatedBySKUVariation: ' . $e->getMessage());
+          return false;
+      }
+  }
+
+  public function getVariationsBySKUProduct(): array
+  {
+      if (!$this->sku) return [];  // ← Elimina el return $this->sku;exit;
+
+      try {
+          $pdo = $this->connection->getConnection();
+
+          // 1) Obtener product_id por SKU (case-insensitive)
+          $stmt = $pdo->prepare("
+              SELECT product_id
+              FROM products
+              WHERE LOWER(SKU) = LOWER(:sku)
+              LIMIT 1
+          ");
+          $stmt->execute([':sku' => $this->sku]);
+          $product = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+          if (!$product) return [];
+
+          $productId = (int)$product['product_id'];
+
+          // 2) Variaciones jerárquicas CORREGIDAS
+          try {
+              // ✅ MySQL 8+ (CTE recursivo) - CORREGIDO
+              $stmt = $pdo->prepare("
+                  WITH RECURSIVE vtree AS (
+                      -- Raíz (parent_id IS NULL, = 0, o se referencia a sí misma)
+                      SELECT
+                          v.variation_id,
+                          v.name,
+                          v.SKU,
+                          v.parent_id,
+                          0 AS level,
+                          CAST(v.variation_id AS CHAR(1000)) AS sort_path
+                      FROM variations v
+                      WHERE v.product_id = :pid
+                          AND (v.parent_id IS NULL OR v.parent_id = 0 OR v.parent_id = v.variation_id)
+
+                      UNION ALL
+
+                      -- Hijos recursivos
+                      SELECT
+                          c.variation_id,
+                          c.name,
+                          c.SKU,
+                          c.parent_id,
+                          p.level + 1 AS level,
+                          CONCAT(p.sort_path, '-', c.variation_id) AS sort_path
+                      FROM variations c
+                      INNER JOIN vtree p
+                          ON c.parent_id = p.variation_id
+                      WHERE c.product_id = :pid
+                          AND c.parent_id != c.variation_id  -- Evitar bucles infinitos
+                  )
+
+                  SELECT variation_id, name, SKU, parent_id, level
+                  FROM vtree
+                  ORDER BY sort_path ASC
+              ");
+              $stmt->execute([':pid' => $productId]);
+              return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+          } catch (\PDOException $e) {
+              // 🔁 Fallback si no soporta WITH RECURSIVE - CORREGIDO
+              $stmt = $pdo->prepare("
+                  SELECT variation_id, name, SKU, parent_id, 0 AS level
+                  FROM variations
+                  WHERE product_id = :pid
+                  ORDER BY
+                      CASE
+                          WHEN parent_id IS NULL OR parent_id = 0 OR parent_id = variation_id THEN 0
+                          WHEN parent_id IN (
+                              SELECT variation_id
+                              FROM variations
+                              WHERE product_id = :pid
+                              AND (parent_id IS NULL OR parent_id = 0 OR parent_id = variation_id)
+                          ) THEN 1
+                          ELSE 2
+                      END,
+                      name ASC
+              ");
+              $stmt->execute([':pid' => $productId]);
+              return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+          }
+
+      } catch (\PDOException $e) {
+          error_log('getVariationsBySKUProduct: ' . $e->getMessage());
+          return [];
+      }
+  }
+  public function getImagesBySKUVariation()
+  {
+      if (!$this->sku_variation) {
+          return []; // ← "images": []
+      }
+
+      try {
+          $pdo = $this->connection->getConnection();
+
+          $stmt = $pdo->prepare("
+              SELECT variation_id
+              FROM variations
+              WHERE SKU = :vsku
+              LIMIT 1
+          ");
+          $stmt->execute([':vsku' => $this->sku_variation]);
+          $variation = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+          if (!$variation) {
+              return [];
+          }
+
+          $variationId = (int)$variation['variation_id'];
+
+          $stmt = $pdo->prepare("
+              SELECT image_id, link, show_on_product_main
+              FROM images
+              WHERE variation_id = :vid
+              ORDER BY image_id ASC
+          ");
+          $stmt->execute([':vid' => $variationId]);
+          $images = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+          return $images; // ✅ listo
+      } catch (\PDOException $e) {
+          error_log('getImagesBySKUVariation: '.$e->getMessage());
+          return []; // ← "images": []
+      }
+  }
+
+  public function getSupplierDetailsBySKUProduct(): array
+  {
+      if (!$this->sku) {
+          return [];
+      }
+
+      try {
+          $pdo = $this->connection->getConnection();
+
+          $stmt = $pdo->prepare("
+              SELECT
+                  p.supplier_id,
+                  s.contact_name
+              FROM products p
+              LEFT JOIN suppliers s ON s.supplier_id = p.supplier_id
+              WHERE p.SKU = :sku
+              LIMIT 1
+          ");
+          $stmt->execute([':sku' => $this->sku]);
+          $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+          if (!$row) {
+              return [];
+          }
+
+          return [
+              'supplier_id'   => $row['supplier_id'] !== null ? (int)$row['supplier_id'] : null,
+              'contact_name' => $row['contact_name'] ?? null,
+          ];
+      } catch (\PDOException $e) {
+          error_log('getSupplierDetailsBySKUProduct: '.$e->getMessage());
+          return [];
+      }
+  }
+
+  public function saveImage(): array
+  {
+      // Validaciones mínimas
+      $vsku = $this->sku_variation ?? null;
+      $link = isset($this->image_address) ? trim((string)$this->image_address) : '';
+
+      if (!$vsku)  return ['success' => false, 'error' => 'Variation SKU requerido'];
+      if ($link==='') return ['success' => false, 'error' => 'Link (image_address) requerido'];
+
+      try {
+          $pdo = $this->connection->getConnection();
+
+          // 1) Hallar variation_id por SKU
+          $stmt = $pdo->prepare("
+              SELECT variation_id
+              FROM variations
+              WHERE SKU = :vsku
+              LIMIT 1
+          ");
+          $stmt->execute([':vsku' => $vsku]);
+          $vid = $stmt->fetch(\PDO::FETCH_COLUMN);
+          if ($vid === false) {
+              return ['success' => false, 'error' => 'Variación no encontrada por SKU'];
+          }
+          $vid = (int)$vid;
+
+          // 2) ¿Ya existe (mismo link para esta variación)?
+          $stmt = $pdo->prepare("
+              SELECT image_id
+              FROM images
+              WHERE variation_id = :vid AND link = :link
+              ORDER BY image_id ASC
+          ");
+          $stmt->execute([':vid' => $vid, ':link' => $link]);
+          $ids = $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+
+          if (!empty($ids)) {
+              // Reemplazar: mantener el primero, actualizarlo y limpiar duplicados
+              $keepId = (int)$ids[0];
+
+              $stmt = $pdo->prepare("UPDATE images SET link = :link, updated = 1, show_on_product_main = :visible WHERE image_id = :id");
+              $stmt->execute([':link' => $link, ':id' => $keepId, ':visible' => $this->show_on_product_main]);
+
+              if (count($ids) > 1) {
+                  $rest = array_map('intval', array_slice($ids, 1));
+                  $in   = implode(',', array_fill(0, count($rest), '?'));
+                  $pdo->prepare("DELETE FROM images WHERE image_id IN ($in)")->execute($rest);
+              }
+
+              return [
+                  'success'       => true,
+                  'action'        => 'replaced',
+                  'image_id'      => $keepId,
+                  'variation_id'  => $vid,
+                  'link'          => $link,
+                  'updated'       => 1
+              ];
+          }
+
+          // 3) No existía: crear con updated=1
+          $stmt = $pdo->prepare("
+              INSERT INTO images (link, updated, variation_id, show_on_product_main)
+              VALUES (:link, 1, :vid, :visible)
+          ");
+          $stmt->execute([':link' => $link, ':vid' => $vid, ':visible' => $this->show_on_product_main]);
+
+          return [
+              'success'      => true,
+              'action'       => 'created',
+              'image_id'     => (int)$pdo->lastInsertId(),
+              'variation_id' => $vid,
+              'link'         => $link,
+              'updated'      => 1
+          ];
+
+      } catch (\PDOException $e) {
+          error_log('saveImage: '.$e->getMessage());
+          return ['success' => false, 'error' => 'DB error'];
+      }
+  }
+
+
+
+
+}
+
+
+?>

@@ -1,0 +1,18 @@
+/* Product presentation is shared with the customer preview. */
+.supplier-product-preview .preview-toolbar {
+  position: static;
+}
+
+.supplier-readiness {
+  margin-top: 24px;
+}
+
+.supplier-readiness > summary {
+  cursor: pointer;
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.supplier-readiness .readiness-summary {
+  margin: 12px 0;
+}
