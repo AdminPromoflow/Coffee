@@ -95,6 +95,9 @@ $logoutAction = 'logout_customer';
           About us
         </a>
       </li>
+      <li>
+        <a class="general-menu__link" href="../../view/dashboard_admin/index.php" title="Interfaz de demostración, sin conexión a datos">Dashboard</a>
+      </li>
       <li class="general-menu__cart-item">
         <a
           class="general-menu__cart<?= $isCartPage ? ' is-active' : '' ?>"
